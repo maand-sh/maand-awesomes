@@ -1,0 +1,19 @@
+{
+    "version": "1.1",
+    "selectors": ["grafana"],
+    "commands": {
+        "command_fetch_prometheus_creds": {
+            "executed_on": ["post_build"],
+            "demands": {
+                "job": "prometheus",
+                "command": "command_provision_grafana_creds"
+            }
+        },
+        "command_provision_admin_password": {
+            "executed_on": ["post_build"]
+        },
+        "command_health_check": {
+            "executed_on": ["health_check"]
+        }
+    }
+}

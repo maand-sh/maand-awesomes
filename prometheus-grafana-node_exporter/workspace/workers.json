@@ -1,0 +1,11 @@
+[
+    {
+      "host": "10.27.221.144", "labels": ["node_exporter", "prometheus"]
+    },
+    {
+      "host": "10.27.221.170", "labels": ["node_exporter", "grafana"]
+    },
+    {
+      "host": "10.27.221.181", "labels": ["node_exporter"]
+    }
+]
