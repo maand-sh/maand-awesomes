@@ -1,0 +1,9 @@
+{
+    "version": "1.0",
+    "selectors": ["worker"],
+    "commands": {
+        "command_health_check": {
+            "executed_on": ["health_check"]
+        }
+    }
+}
