@@ -1,0 +1,12 @@
+{
+  "version": "1.2",
+  "selectors": ["postgres"],
+  "commands": {
+    "command_health_check": {
+      "executed_on": ["health_check"]
+    },
+    "command_app_provisioner": {
+      "executed_on": ["post_deploy"]
+    }
+  }
+}
