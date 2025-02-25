@@ -1,0 +1,15 @@
+{
+  "selectors": ["app_server2"],
+  "commands": {
+    "command_health_check": {
+      "executed_on": ["health_check"]
+    },
+    "command_postgres_provisioner": {
+      "executed_on": ["pre_deploy"],
+      "demands": {
+        "job": "postgres",
+        "command": "command_app_provisioner"
+      }
+    }
+  }
+}

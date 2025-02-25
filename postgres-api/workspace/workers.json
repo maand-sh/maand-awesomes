@@ -6,6 +6,6 @@
       "host": "10.27.221.170", "labels": ["app_server1"]
     },
     {
-      "host": "10.27.221.181"
+      "host": "10.27.221.181", "labels": ["app_server2"]
     }
 ]
