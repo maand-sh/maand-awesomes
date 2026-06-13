@@ -22,14 +22,30 @@ scrape_configs:
   - job_name: 'clickhouse'
     static_configs:
       - targets: [{{- range $index, $ip := (split (get "maand/worker" "clickhouse_workers") ",") -}}{{- if $index}}, {{end}}"{{$ip}}:{{ get "maand" "clickhouse_port_metrics" }}"{{end}}]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        target_label: __name__
+        action: lowercase
 
   - job_name: 'clickhouse_keeper'
     static_configs:
       - targets: [{{- range $index, $ip := (split (get "maand/worker" "clickhouse_keeper_workers") ",") -}}{{- if $index}}, {{end}}"{{$ip}}:{{ get "maand" "clickhouse_keeper_port_metrics" }}"{{end}}]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        target_label: __name__
+        action: lowercase
 
   - job_name: 'haproxy'
     static_configs:
       - targets: [{{- range $index, $ip := (split (get "maand/worker" "haproxy_workers") ",") -}}{{- if $index}}, {{end}}"{{$ip}}:{{ get "maand" "haproxy_port_metrics" }}"{{end}}]
+
+  - job_name: 'zookeeper'
+    static_configs:
+      - targets: [{{- range $index, $ip := (split (get "maand/worker" "zookeeper_workers") ",") -}}{{- if $index}}, {{end}}"{{$ip}}:7000"{{end}}]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        target_label: __name__
+        replacement: 'zookeeper_${1}'
 
 remote_write:
   - url: "http://{{ .WorkerIP }}:9363/write"
