@@ -1,0 +1,9 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <allow_experimental_time_series_table>1</allow_experimental_time_series_table>
+            <allow_experimental_time_series_aggregate_functions>1</allow_experimental_time_series_aggregate_functions>
+            <allow_experimental_ts_to_grid_aggregate_function>1</allow_experimental_ts_to_grid_aggregate_function>
+        </default>
+    </profiles>
+</clickhouse>

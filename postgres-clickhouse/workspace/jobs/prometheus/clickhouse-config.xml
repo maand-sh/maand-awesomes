@@ -1,0 +1,21 @@
+<clickhouse>
+    <prometheus>
+        <port>9363</port>
+        <handlers>
+            <write_handler>
+                <url>/write</url>
+                <handler>
+                    <type>remote_write</type>
+                    <table>metrics.prometheus</table>
+                </handler>
+            </write_handler>
+            <read_handler>
+                <url>/read</url>
+                <handler>
+                    <type>remote_read</type>
+                    <table>metrics.prometheus</table>
+                </handler>
+            </read_handler>
+        </handlers>
+    </prometheus>
+</clickhouse>

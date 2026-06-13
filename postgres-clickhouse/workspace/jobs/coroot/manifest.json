@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "selectors": ["coroot"],
+  "resources": {
+    "ports": {
+      "coroot_port_http": 8081
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "http", "port": "coroot_port_http", "path": "/", "expect_status": 200 }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 30, "interval_seconds": 1 }
+  }
+}

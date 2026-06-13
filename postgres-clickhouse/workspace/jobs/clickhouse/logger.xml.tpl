@@ -1,0 +1,11 @@
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <size>1000M</size>
+        <count>10</count>
+        <async>true</async>
+        <async_queue_max_size>65536</async_queue_max_size>
+    </logger>
+</clickhouse>
