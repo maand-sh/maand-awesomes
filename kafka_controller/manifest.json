@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "selectors": ["kafka_controller"],
+  "update_parallel_count": 1,
+
+  "resources": {
+    "ports": {
+      "kafka_controller_port_controller": 29093,
+      "kafka_controller_port_jmx": 9998,
+      "kafka_controller_port_metrics": 5557
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "kafka_controller_port_controller" },
+      { "type": "http", "port": "kafka_controller_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 60, "interval_seconds": 2 }
+  },
+  "commands": {
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    }
+  }
+}

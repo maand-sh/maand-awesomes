@@ -1,0 +1,14 @@
+<clickhouse>
+    <max_thread_pool_size>15000</max_thread_pool_size>
+    <thread_pool_queue_size>15000</thread_pool_queue_size>
+    <max_thread_pool_free_size>1500</max_thread_pool_free_size>
+    <background_pool_size>24</background_pool_size>
+    <background_merges_mutations_concurrency_ratio>2</background_merges_mutations_concurrency_ratio>
+    <background_fetches_pool_size>16</background_fetches_pool_size>
+    <background_schedule_pool_size>224</background_schedule_pool_size>
+    <background_merges_mutations_scheduling_policy>round_robin</background_merges_mutations_scheduling_policy>
+    <background_move_pool_size>8</background_move_pool_size>
+    <background_common_pool_size>8</background_common_pool_size>
+    <background_distributed_schedule_pool_size>24</background_distributed_schedule_pool_size>
+    <max_io_thread_pool_size>256</max_io_thread_pool_size>
+</clickhouse>

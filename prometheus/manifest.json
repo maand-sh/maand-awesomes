@@ -1,0 +1,16 @@
+{
+    "version": "1.0.0",
+    "resources": {
+        "memory": { "min": "512 mb", "max": "2048 mb" },
+        "ports": {
+            "prometheus_port_http": {}
+        }
+    },
+    "health_check": {
+        "checks": [
+            { "type": "http", "port": "prometheus_port_http", "path": "/-/healthy", "expect_status": 200 }
+        ],
+        "timeout_seconds": 5,
+        "wait": { "attempts": 60, "interval_seconds": 2 }
+    }
+}

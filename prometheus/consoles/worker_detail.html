@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Worker detail</title>
+    <script>const PATH_PREFIX = "{{ pathPrefix }}";</script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    {{template "workers_base_css" .}}
+    <style>
+        .back-link { display: inline-block; margin-bottom: 16px; font-size: 14px; transition: opacity 0.2s ease; }
+        .back-link:hover { opacity: 0.7; }
+        .subtitle { font-size: 14px; color: var(--muted); margin: 0 0 20px; }
+        
+        .detail-dash { animation: fadeInDash 0.4s ease-out forwards; width: 100%; }
+        @keyframes fadeInDash { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .stats-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .stat-card { border: 1px solid var(--border); border-radius: 4px; padding: 12px 14px; }
+        .stat-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+        .stat-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; display: inline-block; transition: opacity 0.3s ease, transform 0.3s ease; }
+        .stat-value.updating { opacity: 0.4 !important; transform: scale(0.96); }
+
+        .time-bar { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .time-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .time-preset, .time-refresh {
+            border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 4px;
+            padding: 6px 16px; font-size: 14px; cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+        }
+        .time-preset:hover, .time-refresh:hover { background: var(--bar-bg); }
+        .time-preset.active { border-color: var(--link); color: var(--link); background: #f0f7ff; }
+        .time-preset:active, .time-refresh:active { transform: scale(0.95); }
+        .time-refresh { margin-left: 8px; }
+
+        .chart-grid { margin-top: 0; width: 100%; }
+        .chart-section { padding: 20px 0; border-bottom: 1px solid var(--border); width: 100%; position: relative; }
+        .chart-section-header { margin-top: 10px; margin-bottom: 10px; min-height: 24px; }
+        .chart-section-header h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+
+        .chart-panel--2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; width: 100%; }
+        .chart-slot { min-width: 0; }
+        .chart-slot-label { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+        
+        .chart-box { width: 100%; overflow: hidden; box-sizing: border-box; position: relative; }
+        .chart-box:not(.chart-box-stacked):not(.chart-box-multiline) { height: 260px; }
+        .chart-box-stacked, .chart-box-multiline { display: flex; flex-direction: column; gap: 0; }
+        .chart-box-stacked svg.chart-svg, .chart-box-multiline svg.chart-svg { flex: 0 0 auto; height: auto; }
+        .chart-box svg { display: block; width: 100%; }
+        .chart-box:not(.chart-box-stacked):not(.chart-box-multiline) svg { height: 100%; }
+
+        .chart-box svg .grid-y .domain { display: none; }
+        .chart-box svg .y-axis .domain, .chart-box svg .x-axis .domain, .chart-box svg .y-axis .tick line, .chart-box svg .x-axis .tick line, .chart-box svg .tick line { stroke: var(--border); stroke-width: 1; }
+        .chart-box svg .tick text { fill: var(--muted); }
+        .chart-box svg .series-area { transition: fill 0.4s var(--ease); }
+
+        .chart-box svg .focus line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
+        .chart-box svg .focus-dot { fill: var(--link); stroke: var(--bg); stroke-width: 2; pointer-events: none; }
+        .chart-box svg .focus-label { font-size: 12px; font-weight: 600; fill: var(--text); pointer-events: none; }
+        .chart-box svg .focus-label-bg { fill: var(--bg); stroke: var(--border); stroke-width: 1; pointer-events: none; }
+        .chart-box svg .overlay { fill: transparent; cursor: crosshair; }
+
+        .chart-legend { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px 12px; padding: 8px 0 0; flex: 0 0 auto; }
+        .chart-box-stacked svg.chart-svg,
+        .chart-box-multiline svg.chart-svg { order: 1; }
+        .chart-box-stacked .chart-legend,
+        .chart-box-multiline .chart-legend { order: 2; position: static; max-width: none; padding: 8px 0 0; padding-left: 22px; }
+        .chart-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); line-height: 1; cursor: pointer; user-select: none; transition: opacity 0.2s var(--ease), color 0.2s var(--ease); }
+        .chart-legend-item:hover { color: var(--text); }
+        .chart-legend-item.hidden { opacity: 0.45; }
+        .chart-legend-item.hidden .chart-legend-swatch { opacity: 0.35; }
+        .chart-legend-item.hidden .chart-legend-label { text-decoration: line-through; }
+        .chart-legend-label { max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chart-legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+        .chart-legend-swatch-line { width: 14px; height: 0; border-bottom: 2px solid; border-radius: 0; background: transparent; }
+
+        .chart-box svg .focus-tip text { font-size: 11px; fill: var(--text); }
+        .chart-box svg .focus-tip .tip-mode { font-weight: 600; }
+        .chart-box svg .focus-tip .tip-val { fill: var(--muted); }
+        .chart-empty { padding: 48px 0; text-align: center; color: var(--muted); font-size: 14px; }
+
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .chart-panel--2col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="detail-dash">
+    <a class="back-link" href="workers.html">← Back to workers</a>
+    <h1 id="workerTitle">Worker</h1>
+    <p class="subtitle" id="workerSubtitle">—</p>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <span class="stat-label">CPU</span>
+            <span class="stat-value" id="cpuNow">—</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Memory</span>
+            <span class="stat-value" id="memNow">—</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Network ↓</span>
+            <span class="stat-value" id="rxNow">—</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Network ↑</span>
+            <span class="stat-value" id="txNow">—</span>
+        </div>
+    </div>
+
+    <div class="time-bar">
+        <div class="time-controls">
+            <button type="button" class="time-preset active" data-range="1h">1h</button>
+            <button type="button" class="time-preset" data-range="3h">3h</button>
+            <button type="button" class="time-preset" data-range="6h">6h</button>
+            <button type="button" class="time-preset" data-range="24h">24h</button>
+            <button type="button" class="time-refresh" id="workers_refresh">Refresh</button>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <section class="chart-section">
+            <div class="chart-panel chart-panel--2col">
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>CPU usage</h2></header>
+                    <div class="chart-box" id="cpuUsageGraph"></div>
+                </div>
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Top CPU applications</h2></header>
+                    <div class="chart-box" id="containerCpuGraph"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="chart-section">
+            <div class="chart-panel chart-panel--2col">
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Memory usage</h2></header>
+                    <div class="chart-box" id="memoryUsageGraph"></div>
+                </div>
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Top memory applications</h2></header>
+                    <div class="chart-box" id="containerMemoryGraph"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="chart-section">
+            <div class="chart-panel chart-panel--2col">
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Disk IOPS</h2></header>
+                    <div class="chart-box" id="diskIopsGraph"></div>
+                </div>
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Disk IO Utilization</h2></header>
+                    <div class="chart-box" id="diskIoUtilGraph"></div>
+                </div>
+            </div>
+            <div class="chart-panel chart-panel--2col">
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Disk Throughput</h2></header>
+                    <div class="chart-box" id="diskDeviceThroughputGraph"></div>
+                </div>
+                <div class="chart-slot">
+                    <header class="chart-section-header"><h2>Disk IO latency</h2></header>
+                    <div class="chart-box" id="diskIoLatencyGraph"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="chart-section">
+            <header class="chart-section-header"><h2>Network</h2></header>
+            <div class="chart-panel chart-panel--2col">
+                <div class="chart-slot">
+                    <h3 class="chart-slot-label">↓ Download</h3>
+                    <div class="chart-box" id="netRxGraph"></div>
+                </div>
+                <div class="chart-slot">
+                    <h3 class="chart-slot-label">↑ Upload</h3>
+                    <div class="chart-box" id="netTxGraph"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+{{template "workers_api_js" .}}
+{{template "workers_live_js" .}}
+{{template "workers_charts_js" .}}
+<script>
+(() => {
+    const { MaandProm: api, MaandLive: live, MaandCharts: chartsApi, MaandMetrics: metrics, MaandCpuModes: cpuModes } = window;
+    
+    let currentRange = "1h";
+    let charts = [];
+    let nowMetrics = [];
+    let resizeTimer = null;
+    let lastWidth = 0;
+    let chartsReady = false;
+
+    const getParam = (name) => new URLSearchParams(window.location.search).get(name) || "";
+
+    const windowRange = () => {
+        const now = Math.floor(Date.now() / 1000);
+        const duration = api.parseDuration(currentRange);
+        const step = Math.max(15, Math.floor(duration / 240));
+        const endSec = now - (now % step);
+        const startSec = endSec - duration;
+        return { end: new Date(endSec * 1000), start: new Date(startSec * 1000), endSec, startSec, step };
+    };
+
+    const assignSeriesColors = (keys, pool) => {
+        const colors = {};
+        keys.forEach((key, index) => { colors[key] = pool[index % pool.length]; });
+        return colors;
+    };
+
+    const buildCharts = (instance) => {
+        const memPctExpr = metrics.memoryInstanceExpr(instance);
+        const rxExpr = metrics.netRxInstanceExpr(instance);
+        const txExpr = metrics.netTxInstanceExpr(instance);
+        
+        const netPlot = { marginLeft: 48, yFormat: api.formatNetSpeed, yAxisFormat: api.formatAxisMbps };
+
+        return {
+            charts: [
+                {
+                    id: "cpuUsageGraph", container: document.getElementById("cpuUsageGraph"), stacked: true,
+                    expr: cpuModes.instanceExpr(instance),
+                    plotOptions: { keys: cpuModes.stackKeys, dataKeys: cpuModes.keys, colors: cpuModes.colors, yFormat: api.formatPercent, yAxisFormat: api.formatAxisPercent, yMax: 100, marginLeft: 48 }
+                },
+                {
+                    id: "containerCpuGraph", container: document.getElementById("containerCpuGraph"), stacked: true,
+                    labelKey: "container_id", topN: 5, expr: metrics.containerCpuPercentExpr(instance),
+                    plotOptions: {
+                        keys: [],
+                        dataKeys: [],
+                        colors: {},
+                        colorPool: metrics.containerCpuColors,
+                        labelFormat: (key) => metrics.formatContainerLabel(key),
+                        yFormat: api.formatPercent,
+                        yAxisFormat: api.formatAxisPercent,
+                        stackTotalLabel: "total",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "memoryUsageGraph", container: document.getElementById("memoryUsageGraph"), stacked: true, labelKey: "kind",
+                    expr: metrics.memoryStackExpr(instance), lineExpr: metrics.memoryTotalGBExpr(instance),
+                    plotOptions: { keys: ["used", "cached"], dataKeys: ["used", "cached"], colors: { used: "#00485C", cached: "#00ACDC" }, yFormat: api.formatGB, yAxisFormat: api.formatAxisGB, stackTotalLabel: "total", lineOverlay: { key: "total", label: "total", stroke: "#3AF5F4" }, marginLeft: 48 }
+                },
+                {
+                    id: "containerMemoryGraph", container: document.getElementById("containerMemoryGraph"), stacked: true,
+                    labelKey: "container_id", topN: 5, expr: metrics.containerMemoryRssGBExpr(instance),
+                    plotOptions: {
+                        keys: [],
+                        dataKeys: [],
+                        colors: {},
+                        colorPool: metrics.containerMemoryColors,
+                        labelFormat: (key) => metrics.formatContainerLabel(key),
+                        yFormat: api.formatGB,
+                        yAxisFormat: api.formatAxisGB,
+                        stackTotalLabel: "total",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "diskIopsGraph", container: document.getElementById("diskIopsGraph"), stacked: true,
+                    labelKey: "device", topN: 5, expr: metrics.diskDeviceIopsExpr(instance),
+                    plotOptions: {
+                        keys: [],
+                        dataKeys: [],
+                        colors: {},
+                        colorPool: metrics.containerCpuColors,
+                        yFormat: api.formatIops,
+                        yAxisFormat: api.formatAxisIops,
+                        stackTotalLabel: "total",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "diskIoUtilGraph", container: document.getElementById("diskIoUtilGraph"), stacked: true,
+                    labelKey: "device", topN: 5, expr: metrics.diskIoUtilStackExpr(instance),
+                    plotOptions: {
+                        keys: [],
+                        dataKeys: [],
+                        colors: {},
+                        colorPool: metrics.containerCpuColors,
+                        yFormat: api.formatPercent,
+                        yAxisFormat: api.formatAxisPercent,
+                        stackTotalLabel: "total",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "diskDeviceThroughputGraph", container: document.getElementById("diskDeviceThroughputGraph"), stacked: true,
+                    labelKey: "device", topN: 5, expr: metrics.diskDeviceThroughputExpr(instance),
+                    plotOptions: {
+                        keys: [],
+                        dataKeys: [],
+                        colors: {},
+                        colorPool: metrics.containerMemoryColors,
+                        yFormat: api.formatDiskThroughput,
+                        yAxisFormat: api.formatAxisDiskThroughput,
+                        stackTotalLabel: "total",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "diskIoLatencyGraph", container: document.getElementById("diskIoLatencyGraph"), stacked: true, labelKey: "op",
+                    expr: metrics.diskIoLatencyStackExpr(instance),
+                    plotOptions: {
+                        keys: ["read", "write"],
+                        dataKeys: ["read", "write"],
+                        colors: { read: "#00ACDC", write: "#3AF5F4" },
+                        yFormat: api.formatLatencyMs,
+                        yAxisFormat: api.formatAxisLatencyMs,
+                        stackTotalLabel: "combined",
+                        marginLeft: 48
+                    }
+                },
+                {
+                    id: "netRxGraph", container: document.getElementById("netRxGraph"), expr: rxExpr,
+                    plotOptions: { ...netPlot, stroke: "#00ACDC", fill: "rgba(0, 172, 220, 0.55)" }
+                },
+                {
+                    id: "netTxGraph", container: document.getElementById("netTxGraph"), expr: txExpr,
+                    plotOptions: { ...netPlot, stroke: "#3AF5F4", fill: "rgba(58, 245, 244, 0.55)" }
+                }
+            ],
+            nowMetrics: [
+                { el: "#cpuNow", expr: cpuModes.totalExpr(instance) },
+                { el: "#memNow", expr: memPctExpr },
+                { el: "#rxNow", expr: rxExpr, format: api.formatNetSpeed },
+                { el: "#txNow", expr: txExpr, format: api.formatNetSpeed }
+            ]
+        };
+    };
+
+    const chartById = (id) => charts.find(c => c.id === id);
+
+    const loadCharts = async (soft) => {
+        const win = windowRange();
+        await Promise.all(charts.map(async (chart) => {
+            let data;
+            let lineData = null;
+
+            if (chart.stacked) {
+                const allSeries = await api.fetchRangeLabeled(chart.expr, win.startSec, win.endSec, win.step, chart.labelKey || "mode");
+                if (chart.topN) {
+                    const topKeys = api.pickTopSeriesKeys(allSeries, chart.topN);
+                    data = {};
+                    topKeys.forEach(key => { data[key] = allSeries[key]; });
+                    chart.plotOptions.keys = topKeys;
+                    chart.plotOptions.dataKeys = topKeys;
+                    chart.plotOptions.colors = assignSeriesColors(topKeys, chart.plotOptions.colorPool || metrics.containerCpuColors);
+                } else {
+                    data = allSeries;
+                }
+                if (chart.lineExpr) {
+                    lineData = await api.fetchRange(chart.lineExpr, win.startSec, win.endSec, win.step);
+                }
+            } else {
+                data = await api.fetchRange(chart.expr, win.startSec, win.endSec, win.step);
+            }
+
+            if (!chart.renderer) {
+                chart.renderer = chart.stacked
+                    ? chartsApi.createStackedRenderer(chart.container, chart.plotOptions)
+                    : chartsApi.createRenderer(chart.container, chart.plotOptions);
+            }
+
+            const windowOpts = { start: win.start, end: win.end };
+            if (chart.stacked) chart.renderer.render(data, soft, windowOpts, lineData);
+            else chart.renderer.render(data, soft, windowOpts);
+
+            chart.lastData = data;
+            chart.lastLineData = lineData;
+            chart.lastWindow = win;
+        }));
+        chartsReady = true;
+    };
+
+    const updateNowValues = async () => {
+        await Promise.all(nowMetrics.map(async (metric) => {
+            const rows = await api.fetchInstant(metric.expr);
+            const out = document.querySelector(metric.el);
+            if (!out || !rows.length) return live.setStat(out, "—");
+            
+            const v = parseFloat(rows[0].value[1]);
+            if (!isFinite(v)) live.setStat(out, "—");
+            else if (metric.format) live.setStat(out, metric.format(v));
+            else live.setStat(out, live.formatPercent(v));
+        }));
+    };
+
+    const refreshAll = (soft) => Promise.all([loadCharts(soft), updateNowValues()]);
+
+    const setRange = (value) => {
+        currentRange = value;
+        document.querySelectorAll(".time-preset").forEach(btn => btn.classList.toggle("active", btn.dataset.range === value));
+        charts.forEach(chart => {
+            if (chart.renderer?.reset) chart.renderer.reset();
+            chart.renderer = null; chart.lastData = null; chart.lastLineData = null;
+        });
+        chartsReady = false;
+        refreshAll(false);
+    };
+
+    const onResize = () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            const width = charts[0]?.container?.clientWidth || 0;
+            if (!width || width === lastWidth || !chartsReady) return;
+            lastWidth = width;
+            
+            charts.forEach(chart => {
+                if (chart.renderer && chart.lastData && chart.lastWindow) {
+                    const win = { start: chart.lastWindow.start, end: chart.lastWindow.end };
+                    if (chart.stacked) chart.renderer.render(chart.lastData, false, win, chart.lastLineData);
+                    else chart.renderer.render(chart.lastData, false, win);
+                }
+            });
+        }, 150);
+    };
+
+    document.querySelectorAll(".time-preset").forEach(btn => btn.addEventListener("click", () => setRange(btn.dataset.range)));
+    document.getElementById("workers_refresh").addEventListener("click", () => refreshAll(true));
+
+    const instance = getParam("instance");
+    const hostname = getParam("hostname") || instance || "Unknown";
+    const subtitle = document.getElementById("workerSubtitle");
+    document.getElementById("workerTitle").textContent = hostname;
+
+    const updateSubtitle = (cores, memGB) => {
+        const parts = [];
+        if (cores != null) parts.push(`${cores} cores`);
+        if (memGB != null) parts.push(api.formatMemoryTotal(memGB));
+        const meta = parts.length ? `${parts.join(" · ")} · ` : "";
+        subtitle.innerHTML = `<span class="live-dot"></span>${meta}${instance || "No instance specified"}`;
+    };
+
+    updateSubtitle(null, null);
+
+    if (!instance) {
+        document.querySelector(".detail-dash").innerHTML = `<div class="empty-state">Select a worker from the <a href="${metrics.listPage}">workers</a> page.</div>`;
+        return;
+    }
+
+    const built = buildCharts(instance);
+    charts = built.charts;
+    nowMetrics = built.nowMetrics;
+    const memChart = chartById("memoryUsageGraph");
+
+    Promise.all([api.fetchInstant(cpuModes.coresExpr(instance)), api.fetchInstant(metrics.memoryTotalGBExpr(instance))])
+        .then(parts => {
+            const cores = parts[0].length ? parseFloat(parts[0][0].value[1]) : null;
+            const memGB = parts[1].length ? parseFloat(parts[1][0].value[1]) : null;
+            updateSubtitle(isFinite(cores) ? Math.round(cores) : null, isFinite(memGB) ? memGB : null);
+            
+            if (memChart && isFinite(memGB)) memChart.plotOptions.yMax = memGB;
+            
+            refreshAll(false).then(() => { lastWidth = charts[0].container.clientWidth; });
+        });
+
+    live.startLoop(() => refreshAll(true));
+    window.addEventListener("resize", onResize);
+})();
+</script>
+{{template "workers_tail" .}}

@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "selectors": ["kafka_broker"],
+  "update_parallel_count": 1,
+
+  "resources": {
+    "ports": {
+      "kafka_broker_port_internal": 29092,
+      "kafka_broker_port_external": 9092,
+      "kafka_broker_port_jmx": 9999,
+      "kafka_broker_port_metrics": 5556
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "kafka_broker_port_internal" },
+      { "type": "tcp", "port": "kafka_broker_port_external" },
+      { "type": "http", "port": "kafka_broker_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 60, "interval_seconds": 2 }
+  },
+  "commands": {
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    },
+    "command_wait_kafka_controller": {
+      "executed_on": ["pre_deploy"],
+      "demands": {
+        "job": "kafka_controller",
+        "command": "command_service",
+        "config": {}
+      }
+    }
+  }
+}

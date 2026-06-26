@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "selectors": ["cassandra"],
+  "deploy_parallel_count": 1,
+  "update_parallel_count": 1,
+  "resources": {
+    "memory": { "min": "1024 mb", "max": "4096 mb" },
+    "ports": {
+      "cassandra_cql_port": {},
+      "cassandra_jmx_port": {},
+      "cassandra_storage_port": 7000,
+      "cassandra_ssl_storage_port": 7001
+    }
+  },
+  "commands": {
+    "command_wait_up": {
+      "executed_on": ["after_allocation_started"]
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "cassandra_cql_port" }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 60, "interval_seconds": 5 }
+  }
+}

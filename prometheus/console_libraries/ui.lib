@@ -1,0 +1,1355 @@
+{{ define "workers_tail" }}
+</body>
+</html>
+{{ end }}
+
+{{ define "workers_base_css" }}
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --link: #0066cc;
+        --border: #e5e7eb;
+        --bar-bg: #f3f4f6;
+        --ok: #10b981;
+        --warn: #f59e0b;
+        --crit: #ef4444;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        --live-ms: 800ms;
+    }
+
+    body {
+        margin: 0;
+        padding: 32px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+    }
+
+    h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 8px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    h2 {
+        font-size: 14px;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+    }
+
+    a {
+        color: var(--link);
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    .muted { color: var(--muted); }
+    .tabular { font-variant-numeric: tabular-nums; }
+
+    .live-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin-right: 6px;
+        border-radius: 50%;
+        background: var(--ok);
+        vertical-align: middle;
+        animation: live-pulse 2s var(--ease) infinite;
+    }
+
+    @keyframes live-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(0.85); }
+    }
+
+    .empty-state {
+        padding: 48px 16px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 14px;
+    }
+</style>
+{{ end }}
+
+{{ define "workers_api_js" }}
+<script>
+window.MaandProm = (() => {
+    const prefix = typeof PATH_PREFIX === "string" ? PATH_PREFIX : "";
+
+    const apiUrl = (path, params) => `${prefix}${path}?${new URLSearchParams(params).toString()}`;
+
+    const parseDuration = (text) => {
+        const m = String(text).trim().match(/^(\d+(?:\.\d+)?)(y|w|d|h|m|s)$/);
+        if (!m) return 3600;
+        const n = parseFloat(m[1]);
+        const u = { y: 31536000, w: 604800, d: 86400, h: 3600, m: 60, s: 1 };
+        return n * u[m[2]];
+    };
+
+    const formatNetSpeed = (bytesPerSec) => {
+        if (!isFinite(bytesPerSec) || bytesPerSec <= 0) return "0 bps";
+        const bps = bytesPerSec * 8;
+        if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
+        if (bps >= 1e3) return `${(bps / 1e3).toFixed(1)} Kbps`;
+        return `${bps.toFixed(0)} bps`;
+    };
+
+    const formatAxisPercent = (v) => isFinite(v) ? `${Math.round(v)}%` : "";
+    const formatPercent = (v) => isFinite(v) ? `${v.toFixed(1)}%` : "—";
+    
+    const formatAxisGB = (v) => isFinite(v) ? `${v >= 10 ? v.toFixed(0) : v.toFixed(1)}G` : "";
+    const formatGB = (v) => isFinite(v) ? `${v.toFixed(1)} GB` : "—";
+    const formatMemoryTotal = (v) => isFinite(v) ? `${v >= 10 ? Math.round(v) : v.toFixed(1)} GB` : null;
+
+    const formatAxisMbps = (bytesPerSec) => {
+        if (!isFinite(bytesPerSec) || bytesPerSec <= 0) return "0M";
+        const mbps = bytesPerSec * 8 / 1e6;
+        if (mbps >= 100) return `${Math.round(mbps)}M`;
+        if (mbps >= 10) return `${mbps.toFixed(0)}M`;
+        return `${mbps.toFixed(1)}M`;
+    };
+
+    const formatAxisIops = (v) => {
+        if (!isFinite(v) || v <= 0) return "0";
+        if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+        return Math.round(v).toString();
+    };
+
+    const formatIops = (v) => {
+        if (!isFinite(v)) return "—";
+        if (v >= 1000) return `${(v / 1000).toFixed(1)}k IOPS`;
+        return `${Math.round(v)} IOPS`;
+    };
+
+    const formatAxisLatencyMs = (v) => {
+        if (!isFinite(v) || v <= 0) return "0";
+        if (v >= 1000) return `${(v / 1000).toFixed(1)}s`;
+        if (v >= 100) return `${Math.round(v)}`;
+        if (v >= 10) return `${v.toFixed(0)}`;
+        return `${v.toFixed(1)}`;
+    };
+
+    const formatLatencyMs = (v) => {
+        if (!isFinite(v) || v <= 0) return "—";
+        if (v >= 1000) return `${(v / 1000).toFixed(2)} s`;
+        if (v >= 100) return `${v.toFixed(0)} ms`;
+        if (v >= 10) return `${v.toFixed(1)} ms`;
+        return `${v.toFixed(2)} ms`;
+    };
+
+    const formatAxisDiskThroughput = (bytesPerSec) => {
+        if (!isFinite(bytesPerSec) || bytesPerSec <= 0) return "0";
+        const mbps = bytesPerSec / 1e6;
+        if (mbps >= 1000) return `${(mbps / 1000).toFixed(0)}G`;
+        if (mbps >= 100) return `${Math.round(mbps)}M`;
+        if (mbps >= 10) return `${mbps.toFixed(0)}M`;
+        return `${mbps.toFixed(1)}M`;
+    };
+
+    const formatDiskThroughput = (bytesPerSec) => {
+        if (!isFinite(bytesPerSec) || bytesPerSec <= 0) return "—";
+        const mbps = bytesPerSec / 1e6;
+        if (mbps >= 1000) return `${(mbps / 1000).toFixed(2)} GB/s`;
+        if (mbps >= 10) return `${mbps.toFixed(1)} MB/s`;
+        return `${mbps.toFixed(2)} MB/s`;
+    };
+
+    const formatUptime = (seconds) => {
+        if (!isFinite(seconds) || seconds < 0) return "";
+        if (seconds < 60) return `${Math.floor(seconds)}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+        return `${Math.floor(seconds / 86400)}d`;
+    };
+
+    const fetchInstant = async (expr) => {
+        try {
+            const r = await fetch(apiUrl("/api/v1/query", { query: expr }));
+            const data = await r.json();
+            return data?.data?.result || [];
+        } catch { return []; }
+    };
+
+    const fetchRange = async (expr, start, end, step) => {
+        try {
+            const r = await fetch(apiUrl("/api/v1/query_range", {
+                query: expr, start: String(start), end: String(end), step: String(step)
+            }));
+            const data = await r.json();
+            if (!data?.data?.result?.length) return [];
+            return (data.data.result[0].values || [])
+                .map(pair => ({ date: new Date(pair[0] * 1000), value: parseFloat(pair[1]) }))
+                .filter(d => isFinite(d.value));
+        } catch { return []; }
+    };
+
+    const fetchRangeLabeled = async (expr, start, end, step, labelKey = "mode") => {
+        try {
+            const r = await fetch(apiUrl("/api/v1/query_range", {
+                query: expr, start: String(start), end: String(end), step: String(step)
+            }));
+            const data = await r.json();
+            if (!data?.data?.result) return {};
+            
+            const series = {};
+            data.data.result.forEach(row => {
+                const key = (row.metric && row.metric[labelKey]) || "unknown";
+                series[key] = (row.values || [])
+                    .map(pair => ({ date: new Date(pair[0] * 1000), value: parseFloat(pair[1]) }))
+                    .filter(d => isFinite(d.value));
+            });
+            return series;
+        } catch { return {}; }
+    };
+
+    const byInstance = (results) => {
+        const map = {};
+        results.forEach(row => {
+            const inst = row.metric?.instance;
+            if (!inst) return;
+            const v = parseFloat(row.value[1]);
+            map[inst] = isFinite(v) ? v : null;
+        });
+        return map;
+    };
+
+    const byInstanceLabeled = (results, labelKey = "mode") => {
+        const map = {};
+        results.forEach(row => {
+            const inst = row.metric?.instance;
+            const label = row.metric?.[labelKey];
+            if (!inst || !label) return;
+            const v = parseFloat(row.value[1]);
+            if (!map[inst]) map[inst] = {};
+            map[inst][label] = isFinite(v) ? v : 0;
+        });
+        return map;
+    };
+
+    const escInstance = (instance) => String(instance).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+    const pickTopSeriesKeys = (series, topN = 5) => Object.keys(series || {})
+        .map(key => {
+            let peak = 0;
+            (series[key] || []).forEach(point => {
+                if (point.value > peak) peak = point.value;
+            });
+            return { key, peak };
+        })
+        .filter(row => row.peak > 0)
+        .sort((a, b) => b.peak - a.peak)
+        .slice(0, topN)
+        .map(row => row.key);
+
+    return {
+        apiUrl, parseDuration, formatNetSpeed, formatAxisPercent, formatPercent,
+        formatAxisGB, formatGB, formatMemoryTotal, formatAxisMbps, formatAxisIops,
+        formatIops, formatAxisLatencyMs, formatLatencyMs, formatAxisDiskThroughput, formatDiskThroughput,
+        formatUptime, fetchInstant, fetchRange, fetchRangeLabeled,
+        byInstance, byInstanceLabeled, pickTopSeriesKeys, escInstance
+    };
+})();
+
+window.MaandMetrics = {
+    job: "coroot_node_agent",
+    netRateWindow: "2m",
+    listPage: "workers.html",
+    detailPage: "worker_detail.html",
+
+    jobSelector() { return `job="${this.job}"`; },
+    escInstance(instance) { return window.MaandProm.escInstance(instance); },
+
+    detailUrl(instance, hostname) {
+        const params = new URLSearchParams({ instance });
+        if (hostname) params.set("hostname", hostname);
+        return `${this.detailPage}?${params.toString()}`;
+    },
+
+    upExpr() { return `up{${this.jobSelector()}}`; },
+    
+    memoryAllExpr() {
+        return `(1 - node_resources_memory_available_bytes{${this.jobSelector()}} / node_resources_memory_total_bytes{${this.jobSelector()}}) * 100`;
+    },
+
+    memoryInstanceExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `(1 - node_resources_memory_available_bytes{instance="${inst}"} / node_resources_memory_total_bytes{instance="${inst}"}) * 100`;
+    },
+
+    memoryInstanceGBExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `(node_resources_memory_total_bytes{instance="${inst}"} - node_resources_memory_available_bytes{instance="${inst}"}) / 1024 / 1024 / 1024`;
+    },
+
+    memoryTotalGBExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `node_resources_memory_total_bytes{instance="${inst}"} / 1024 / 1024 / 1024`;
+    },
+
+    memoryStackExpr(instance) {
+        const inst = this.escInstance(instance);
+        const sel = `instance="${inst}",${this.jobSelector()}`;
+        const gb = " / 1024 / 1024 / 1024";
+        return `(
+            label_replace((node_resources_memory_total_bytes{${sel}} - node_resources_memory_available_bytes{${sel}})${gb}, "kind", "used", "", "") or 
+            label_replace(node_resources_memory_cached_bytes{${sel}}${gb}, "kind", "cached", "", "")
+        )`;
+    },
+
+    memoryAvailableGBExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `node_resources_memory_available_bytes{instance="${inst}"} / 1024 / 1024 / 1024`;
+    },
+
+    netRxAllExpr() {
+        return `sum by (instance) (rate(node_net_received_bytes_total{${this.jobSelector()}}[${this.netRateWindow}]))`;
+    },
+
+    netTxAllExpr() {
+        return `sum by (instance) (rate(node_net_transmitted_bytes_total{${this.jobSelector()}}[${this.netRateWindow}]))`;
+    },
+
+    netRxInstanceExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `sum(rate(node_net_received_bytes_total{instance="${inst}"}[${this.netRateWindow}]))`;
+    },
+
+    netTxInstanceExpr(instance) {
+        const inst = this.escInstance(instance);
+        return `sum(rate(node_net_transmitted_bytes_total{instance="${inst}"}[${this.netRateWindow}]))`;
+    },
+
+    diskIopsStackExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        return `(
+            label_replace(sum(rate(node_resources_disk_reads_total{instance="${inst}",${j}}[${w}])), "op", "read", "", "") or 
+            label_replace(sum(rate(node_resources_disk_writes_total{instance="${inst}",${j}}[${w}])), "op", "write", "", "")
+        )`;
+    },
+
+    diskIopsTotalExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        return `sum(rate(node_resources_disk_reads_total{instance="${inst}",${j}}[${w}])) + sum(rate(node_resources_disk_writes_total{instance="${inst}",${j}}[${w}]))`;
+    },
+
+    diskIoUtilStackExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        return `100 * sum by (device) (rate(node_resources_disk_io_time_seconds_total{instance="${inst}",${j}}[${w}]))`;
+    },
+
+    diskIoLatencyStackExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        const sel = `instance="${inst}",${j}`;
+        return `(
+            label_replace(
+                1000 * sum(rate(node_resources_disk_read_time_seconds_total{${sel}}[${w}]))
+                / sum(rate(node_resources_disk_reads_total{${sel}}[${w}])),
+                "op", "read", "", ""
+            ) or
+            label_replace(
+                1000 * sum(rate(node_resources_disk_write_time_seconds_total{${sel}}[${w}]))
+                / sum(rate(node_resources_disk_writes_total{${sel}}[${w}])),
+                "op", "write", "", ""
+            )
+        )`;
+    },
+
+    diskDeviceIopsExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        const sel = `instance="${inst}",${j}`;
+        return `sum by (device) (
+            rate(node_resources_disk_reads_total{${sel}}[${w}])
+            + rate(node_resources_disk_writes_total{${sel}}[${w}])
+        )`;
+    },
+
+    diskDeviceThroughputExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = this.netRateWindow;
+        const j = this.jobSelector();
+        const sel = `instance="${inst}",${j}`;
+        return `sum by (device) (
+            rate(node_resources_disk_read_bytes_total{${sel}}[${w}])
+            + rate(node_resources_disk_written_bytes_total{${sel}}[${w}])
+        )`;
+    },
+
+    containerCpuPercentExpr(instance) {
+        const inst = this.escInstance(instance);
+        const w = window.MaandCpuModes.rateWindow;
+        const j = this.jobSelector();
+        const sel = `instance="${inst}",${j}`;
+        return `100 * sum by (container_id) (rate(container_resources_cpu_usage_seconds_total{${sel}}[${w}])) / scalar(max(node_resources_cpu_logical_cores{${sel}}))`;
+    },
+
+    formatContainerLabel(containerId) {
+        if (!containerId) return "unknown";
+        const id = String(containerId);
+        if (id.startsWith("k8s/")) {
+            const parts = id.split("/");
+            return parts.length >= 3 ? parts[parts.length - 1] : id;
+        }
+        if (id.startsWith("/docker/")) return id.slice(8);
+        const parts = id.split("/").filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : id;
+    },
+
+    containerCpuColors: ["#00485C", "#EB7E1C", "#D24141", "#3AF5F4", "#00ACDC"],
+
+    containerMemoryRssGBExpr(instance) {
+        const inst = this.escInstance(instance);
+        const j = this.jobSelector();
+        return `sum by (container_id) (container_resources_memory_rss_bytes{instance="${inst}",${j}}) / 1024 / 1024 / 1024`;
+    },
+
+    containerMemoryColors: ["#00485C", "#EB7E1C", "#D24141", "#3AF5F4", "#00ACDC"],
+
+    uptimeExpr() {
+        return `node_uptime_seconds{${this.jobSelector()}}`;
+    }
+};
+
+window.MaandCpuModes = {
+    keys: ["idle", "steal", "nice", "user", "system", "iowait", "irq", "softirq"],
+    stackKeys: ["user", "nice", "system", "iowait", "irq", "softirq", "steal", "idle"],
+    rateWindow: "1m",
+    
+    usedKeys() { return this.stackKeys.filter(key => key !== "idle"); },
+    usedFromRow(row) {
+        if (!row) return 0;
+        return this.usedKeys().reduce((sum, key) => sum + (row[key] || 0), 0);
+    },
+    
+    allInstancesExpr() {
+        const w = this.rateWindow;
+        const j = window.MaandMetrics.jobSelector();
+        return `100 * sum by (instance, mode) (rate(node_resources_cpu_usage_seconds_total{${j}}[${w}])) / ignoring(mode) group_left sum by (instance) (rate(node_resources_cpu_usage_seconds_total{${j}}[${w}]))`;
+    },
+    
+    allInstancesTotalExpr() {
+        const w = this.rateWindow;
+        const j = window.MaandMetrics.jobSelector();
+        return `(1 - sum by (instance) (rate(node_resources_cpu_usage_seconds_total{${j},mode="idle"}[${w}])) / sum by (instance) (rate(node_resources_cpu_usage_seconds_total{${j}}[${w}]))) * 100`;
+    },
+    
+    instanceExpr(instance) {
+        const inst = window.MaandMetrics.escInstance(instance);
+        const w = this.rateWindow;
+        const j = window.MaandMetrics.jobSelector();
+        return `100 * sum by (mode) (rate(node_resources_cpu_usage_seconds_total{instance="${inst}",${j}}[${w}])) / ignoring(mode) group_left sum(rate(node_resources_cpu_usage_seconds_total{instance="${inst}",${j}}[${w}]))`;
+    },
+    
+    totalExpr(instance) {
+        const inst = window.MaandMetrics.escInstance(instance);
+        const w = this.rateWindow;
+        return `(1 - sum(rate(node_resources_cpu_usage_seconds_total{instance="${inst}",mode="idle"}[${w}])) / sum(rate(node_resources_cpu_usage_seconds_total{instance="${inst}"}[${w}]))) * 100`;
+    },
+    
+    coresExpr(instance) {
+        const inst = window.MaandMetrics.escInstance(instance);
+        return `node_resources_cpu_logical_cores{instance="${inst}",${window.MaandMetrics.jobSelector()}}`;
+    },
+    
+    colors: {
+        idle: "transparent", user: "#00485C", nice: "#006B7C", system: "#00ACDC",
+        iowait: "#EB7E1C", irq: "#D24141", softirq: "#3AF5F4", steal: "#62DFF0"
+    }
+};
+</script>
+{{ end }}
+
+{{ define "workers_live_js" }}
+<script>
+window.MaandLive = (() => {
+    const REFRESH_MS = 5000;
+    const TRANSITION_MS = 800;
+
+    const progressLevel = (percent) => percent >= 90 ? "crit" : (percent >= 75 ? "warn" : "");
+
+    const ensureProgress = (cell) => {
+        let wrap = cell.querySelector(".progress");
+        if (wrap) return wrap;
+        cell.innerHTML = `
+            <div class="progress">
+                <div class="progress-fill"></div>
+                <span class="progress-label muted">—</span>
+            </div>`;
+        return cell.querySelector(".progress");
+    };
+
+    const formatPercent = (value) => isFinite(value) ? `${value.toFixed(1)}%` : "—";
+
+    const updateProgress = (cell, percent) => {
+        if (!cell) return;
+        const p = isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+        ensureProgress(cell);
+        
+        const fill = cell.querySelector(".progress-fill");
+        const label = cell.querySelector(".progress-label");
+        
+        fill.style.width = `${p.toFixed(1)}%`;
+        fill.className = `progress-fill ${progressLevel(p)}`;
+        label.textContent = formatPercent(p);
+        label.classList.remove("muted");
+    };
+
+    const ensureStackedCpu = (cell) => {
+        if (cell.querySelector(".progress-track")) return;
+        cell.classList.add("progress-stacked");
+        cell.innerHTML = `
+            <div class="progress-track"><div class="progress-stack"></div></div>
+            <span class="progress-label muted">—</span>`;
+    };
+
+    const sumCpuModes = (modeMap, keys) => keys.reduce((sum, key) => sum + (modeMap?.[key] || 0), 0);
+
+    const updateStackedCpu = (cell, modeMap, totalCpu) => {
+        if (!cell || !window.MaandCpuModes) return;
+        
+        ensureStackedCpu(cell);
+        const { keys, colors } = window.MaandCpuModes;
+        const stack = cell.querySelector(".progress-stack");
+        const label = cell.querySelector(".progress-label");
+        
+        const modeSum = sumCpuModes(modeMap, keys);
+        const total = isFinite(totalCpu) ? totalCpu : modeSum;
+        const width = Math.max(0, Math.min(100, total));
+
+        stack.style.width = `${width.toFixed(2)}%`;
+        stack.innerHTML = "";
+        
+        keys.forEach(key => {
+            const value = modeMap?.[key] || 0;
+            if (value <= 0.0001) return;
+            const seg = document.createElement("div");
+            seg.className = "progress-seg";
+            seg.style.flex = `${value} 1 0`;
+            seg.style.background = colors[key] || "#9ca3af";
+            seg.title = `${key}: ${value.toFixed(2)}%`;
+            stack.appendChild(seg);
+        });
+
+        label.textContent = `${width.toFixed(1)}%`;
+        label.classList.remove("muted");
+        label.style.color = total >= 90 ? "var(--crit)" : (total >= 75 ? "var(--warn)" : "");
+    };
+
+    const setText = (el, text) => {
+        if (!el || el.textContent === text) return;
+        el.classList.add("value-changing");
+        el.textContent = text;
+        setTimeout(() => el.classList.remove("value-changing"), TRANSITION_MS);
+    };
+
+    const setStat = (el, text) => {
+        if (!el || el.textContent === text) return;
+        el.classList.add("updating");
+        el.textContent = text;
+        setTimeout(() => el.classList.remove("updating"), TRANSITION_MS);
+    };
+
+    const startLoop = (fn) => {
+        let busy = false;
+        const tick = async () => {
+            if (busy) return;
+            busy = true;
+            try { await fn(); } 
+            finally { busy = false; }
+        };
+        tick();
+        return setInterval(tick, REFRESH_MS);
+    };
+
+    return {
+        REFRESH_MS, TRANSITION_MS, formatPercent, updateProgress,
+        updateStackedCpu, setText, setStat, startLoop
+    };
+})();
+</script>
+{{ end }}
+
+{{ define "workers_charts_js" }}
+<script>
+window.MaandCharts = (() => {
+    const TRANSITION_MS = window.MaandLive ? window.MaandLive.TRANSITION_MS : 800;
+    const ease = d3.easeCubicInOut;
+    let clipSeq = 0;
+    const TIP_WIDTH = 170;
+
+    const trimChartLabel = (text, max = 15) => {
+        const s = String(text ?? "");
+        return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+    };
+
+    const appendTipRow = (tip, y, labelX, valueX, label, value) => {
+        tip.append("text").attr("class", "tip-mode").attr("x", labelX).attr("y", y).text(label);
+        tip.append("text").attr("class", "tip-val").attr("x", valueX).attr("y", y).attr("text-anchor", "end").text(value);
+    };
+
+    const fillFromStroke = (stroke, opacity = 0.14) => {
+        if (String(stroke).charAt(0) === "#" && stroke.length >= 7) {
+            const r = parseInt(stroke.slice(1, 3), 16);
+            const g = parseInt(stroke.slice(3, 5), 16);
+            const b = parseInt(stroke.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${opacity})`;
+        }
+        return stroke;
+    };
+
+    const blendSeries = (prev, next, t) => {
+        if (!prev?.length) return next;
+        const prevMap = Object.fromEntries(prev.map(d => [d.date.getTime(), d.value]));
+        
+        return next.map(d => {
+            let oldVal = prevMap[d.date.getTime()];
+            if (oldVal === undefined) {
+                const closest = prev.reduce((best, p) => {
+                    const dist = Math.abs(p.date - d.date);
+                    return !best || dist < best.dist ? { dist, value: p.value } : best;
+                }, null);
+                oldVal = closest ? closest.value : d.value;
+            }
+            return { date: d.date, value: oldVal + (d.value - oldVal) * t };
+        });
+    };
+
+    const yTopFor = (data, state, soft) => {
+        const yMax = d3.max(data, d => d.value) || 0;
+        const ceil = Math.max(yMax * 1.15, yMax + 0.05, 0.1);
+        state.yCeil = (!soft || state.yCeil === undefined) ? ceil : Math.max(state.yCeil * 0.998, ceil);
+        return state.yCeil;
+    };
+
+    const nearestPoint = (data, date) => {
+        if (!data.length) return null;
+        const i = d3.bisector(d => d.date).left(data, date, 1);
+        const d0 = data[i - 1];
+        const d1 = data[i];
+        if (!d0) return d1;
+        if (!d1) return d0;
+        return date - d0.date > d1.date - date ? d1 : d0;
+    };
+
+    const labelPos = (xPos, yPos, innerW, innerH, labelW, labelH) => {
+        const pad = 8;
+        let lx = xPos + pad;
+        let ly = yPos - pad;
+        if (lx + labelW > innerW) lx = xPos - labelW - pad;
+        if (ly - labelH < 0) ly = yPos + pad + labelH;
+        if (ly > innerH) ly = innerH - pad;
+        return { x: lx, y: ly };
+    };
+
+    const tweenPath = (generator, fromData, toData) => () => (t) => generator(blendSeries(fromData, toData, t));
+
+    const styleAxis = (sel) => {
+        sel.select(".domain").attr("stroke", "#d1d5db").attr("stroke-width", 1);
+        sel.selectAll("text").attr("fill", "#6b7280").attr("font-size", "11px");
+        sel.selectAll("line").attr("stroke", "#e5e7eb");
+    };
+
+    const renderYAxis = (g, y, duration, yAxisFormat, innerW) => {
+        let yAxis = g.select(".y-axis");
+        if (yAxis.empty()) yAxis = g.insert("g", ".grid-y").attr("class", "y-axis");
+        
+        yAxis.transition().duration(duration).ease(ease)
+            .call(d3.axisLeft(y).ticks(4).tickSize(4).tickFormat(yAxisFormat))
+            .call(styleAxis);
+            
+        g.select(".grid-y").transition().duration(duration).ease(ease)
+            .call(d3.axisLeft(y).ticks(4).tickSize(-innerW).tickFormat(""))
+            .call(sel => {
+                sel.select(".domain").remove();
+                sel.selectAll("line").attr("stroke", "#e5e7eb");
+            });
+    };
+
+    const renderXAxis = (g, x, innerH, duration) => {
+        g.select(".x-axis")
+            .attr("transform", `translate(0,${innerH})`)
+            .transition().duration(duration).ease(ease)
+            .call(d3.axisBottom(x).ticks(5).tickSize(4).tickFormat(d3.utcFormat("%H:%M")))
+            .call(styleAxis);
+    };
+
+    const STACKED_CHART_HEIGHT = 280;
+
+    const chartPlotHeight = (container, legendBelow) =>
+        legendBelow ? STACKED_CHART_HEIGHT : Math.max(200, container.clientHeight);
+
+    const applySvgDimensions = (svg, width, height, duration) => {
+        const viewBox = `0 0 ${width} ${height}`;
+        if (duration) {
+            svg.transition().duration(duration).ease(ease)
+                .attr("width", width).attr("height", height).attr("viewBox", viewBox);
+        } else {
+            svg.attr("width", width).attr("height", height).attr("viewBox", viewBox);
+        }
+    };
+
+    const createRenderer = (container, options = {}) => {
+        const yFormat = options.yFormat || (v => String(Math.round(v)));
+        const yAxisFormat = options.yAxisFormat || yFormat;
+        const stroke = options.stroke || "#0066cc";
+        const fill = options.fill || fillFromStroke(stroke, 0.14);
+        const marginLeft = options.marginLeft ?? 12;
+        const clipId = `chart-clip-${++clipSeq}`;
+        const state = { lastData: null, yCeil: undefined, x: null, y: null, innerW: 0, innerH: 0 };
+
+        const bindHover = (g, data) => {
+            const focus = g.select(".focus");
+            const overlay = g.select(".overlay");
+
+            const hideFocus = () => focus.style("display", "none");
+
+            const showFocus = (event) => {
+                if (!data.length || !state.x || !state.y) return;
+                const point = d3.pointer(event, overlay.node());
+                const d = nearestPoint(data, state.x.invert(point[0]));
+                
+                if (!d || !isFinite(d.value)) return hideFocus();
+
+                const cx = state.x(d.date);
+                const cy = state.y(d.value);
+                const text = yFormat(d.value);
+                const labelW = Math.max(40, text.length * 7 + 16);
+                const labelH = 22;
+                const pos = labelPos(cx, cy, state.innerW, state.innerH, labelW, labelH);
+
+                focus.style("display", null);
+                focus.select(".focus-line-x").attr("x1", cx).attr("x2", cx).attr("y1", 0).attr("y2", state.innerH);
+                focus.select(".focus-line-y").attr("x1", 0).attr("x2", state.innerW).attr("y1", cy).attr("y2", cy);
+                focus.select(".focus-dot").attr("cx", cx).attr("cy", cy);
+                focus.select(".focus-label-bg").attr("x", pos.x - 8).attr("y", pos.y - labelH + 4).attr("width", labelW).attr("height", labelH);
+                focus.select(".focus-label").attr("x", pos.x).attr("y", pos.y).text(text);
+            };
+
+            overlay.on("mousemove", showFocus).on("mouseenter", showFocus).on("mouseleave", hideFocus);
+        };
+
+        const render = (data, soft, windowRange) => {
+            const width = Math.max(320, container.clientWidth);
+            const height = Math.max(200, container.clientHeight);
+            const margin = { top: 8, right: 8, bottom: 32, left: marginLeft };
+            const innerW = width - margin.left - margin.right;
+            const innerH = height - margin.top - margin.bottom;
+            const duration = soft ? TRANSITION_MS : 0;
+
+            if (!data.length) {
+                d3.select(container).selectAll("svg").remove();
+                state.lastData = null;
+                state.yCeil = undefined;
+                if (!container.querySelector(".chart-empty")) {
+                    const empty = document.createElement("div");
+                    empty.className = "chart-empty";
+                    empty.textContent = "No data for this range";
+                    container.appendChild(empty);
+                }
+                return;
+            }
+
+            container.querySelector(".chart-empty")?.remove();
+
+            const endDate = windowRange?.end || d3.max(data, d => d.date);
+            const startDate = windowRange?.start || d3.min(data, d => d.date);
+
+            const x = d3.scaleUtc().domain([startDate, endDate]).range([0, innerW]);
+            const y = d3.scaleLinear().domain([0, yTopFor(data, state, soft)]).range([innerH, 0]);
+            
+            const area = d3.area()
+                .defined(d => isFinite(d.value))
+                .x(d => x(d.date))
+                .y0(innerH)
+                .y1(d => y(d.value))
+                .curve(d3.curveMonotoneX);
+
+            let svg = d3.select(container).select("svg.chart-svg");
+            
+            if (svg.empty()) {
+                svg = d3.select(container).append("svg")
+                    .attr("class", "chart-svg").attr("width", width).attr("height", height)
+                    .attr("viewBox", `0 0 ${width} ${height}`);
+                    
+                svg.append("defs").append("clipPath").attr("id", clipId).append("rect").attr("class", "clip-rect");
+                
+                const root = svg.append("g").attr("class", "plot").attr("transform", `translate(${margin.left},${margin.top})`);
+                root.append("g").attr("class", "y-axis");
+                root.append("g").attr("class", "grid-y");
+                root.append("g").attr("class", "x-axis");
+                
+                const dataG = root.append("g").attr("class", "data").attr("clip-path", `url(#${clipId})`);
+                dataG.append("path").attr("class", "series-area").attr("fill", fill).attr("stroke", "none");
+                    
+                const focus = root.append("g").attr("class", "focus").style("display", "none");
+                focus.append("line").attr("class", "focus-line-x");
+                focus.append("line").attr("class", "focus-line-y");
+                focus.append("circle").attr("class", "focus-dot").attr("r", 4);
+                focus.append("rect").attr("class", "focus-label-bg").attr("rx", 3).attr("ry", 3);
+                focus.append("text").attr("class", "focus-label");
+                
+                root.append("rect").attr("class", "overlay");
+            } else {
+                applySvgDimensions(svg, width, height, duration);
+                svg.select(".series-area").attr("fill", fill);
+            }
+
+            svg.select(".clip-rect").attr("width", innerW).attr("height", innerH);
+
+            const g = svg.select(".plot");
+            state.x = x;
+            state.y = y;
+            state.innerW = innerW;
+            state.innerH = innerH;
+
+            g.select(".overlay").attr("width", innerW).attr("height", innerH).attr("x", 0).attr("y", 0);
+
+            renderYAxis(g, y, duration, yAxisFormat, innerW);
+            renderXAxis(g, x, innerH, duration);
+
+            const areaPath = g.select(".data .series-area");
+
+            if (soft && state.lastData?.length) {
+                areaPath.interrupt().transition().duration(duration).ease(ease).attrTween("d", tweenPath(area, state.lastData, data));
+            } else {
+                areaPath.interrupt().datum(data).attr("d", area);
+            }
+
+            g.select(".data .series").remove();
+
+            g.select(".focus-dot").attr("fill", stroke);
+            state.lastData = data.map(d => ({ date: d.date, value: d.value }));
+            bindHover(g, data);
+        };
+
+        return {
+            render,
+            reset: () => {
+                state.lastData = null;
+                state.yCeil = undefined;
+            }
+        };
+    };
+
+    const rowsFromSeries = (series, keys) => {
+        const tsMap = {};
+        keys.forEach(key => {
+            (series[key] || []).forEach(point => {
+                const ts = point.date.getTime();
+                if (!tsMap[ts]) tsMap[ts] = { date: point.date };
+                tsMap[ts][key] = point.value;
+            });
+        });
+        return Object.keys(tsMap).sort((a, b) => a - b).map(ts => {
+            const row = tsMap[ts];
+            keys.forEach(key => { if (!isFinite(row[key])) row[key] = 0; });
+            return row;
+        });
+    };
+
+    const createStackedRenderer = (container, options = {}) => {
+        let keys = options.keys || [];
+        let dataKeys = options.dataKeys || keys;
+        const colors = options.colors || {};
+        const labelFormat = options.labelFormat || (key => key);
+        const displayLabel = (key) => trimChartLabel(labelFormat(key));
+        const yFormat = options.yFormat || (v => `${v.toFixed(1)}%`);
+        const yAxisFormat = options.yAxisFormat || yFormat;
+        const marginLeft = options.marginLeft ?? 12;
+        const stackTotalLabel = options.stackTotalLabel || "used";
+        const lineOverlay = options.lineOverlay || null;
+        const clipId = `chart-clip-${++clipSeq}`;
+        
+        const state = {
+            rows: [], lastSeries: null, lastLineData: null, lastWindow: null,
+            hidden: {}, x: null, y: null, innerW: 0, innerH: 0, yCeil: undefined
+        };
+
+        const activeKeys = () => (options.keys && options.keys.length) ? options.keys : keys;
+        const activeDataKeys = () => {
+            if (options.dataKeys && options.dataKeys.length) return options.dataKeys;
+            if (options.keys && options.keys.length) return options.keys;
+            return dataKeys;
+        };
+
+        const updateLegendStyles = () => {
+            container.querySelectorAll(".chart-legend-item").forEach(item => {
+                item.classList.toggle("hidden", !!state.hidden[item.dataset.mode]);
+            });
+        };
+
+        const toggleMode = (key) => {
+            state.hidden[key] = !state.hidden[key];
+            updateLegendStyles();
+            if (state.lastSeries && state.lastWindow) {
+                render(state.lastSeries, true, state.lastWindow, state.lastLineData);
+            }
+        };
+
+        const syncLegend = () => {
+            const currentKeys = activeKeys();
+            container.classList.add("chart-box-stacked");
+            let legend = container.querySelector(".chart-legend");
+            const signature = currentKeys.join("\0") + (lineOverlay ? "|line" : "");
+            if (legend?.dataset.signature === signature) {
+                updateLegendStyles();
+                return legend;
+            }
+            if (legend) legend.remove();
+
+            legend = document.createElement("div");
+            legend.className = "chart-legend";
+            legend.dataset.signature = signature;
+
+            currentKeys.forEach(key => {
+                if (key === "idle") return;
+                const item = document.createElement("span");
+                item.className = "chart-legend-item";
+                item.dataset.mode = key;
+                item.title = key;
+                item.title = key;
+                item.innerHTML = `<span class="chart-legend-swatch" style="background: ${colors[key] || '#9ca3af'}"></span><span class="chart-legend-label">${displayLabel(key)}</span>`;
+                legend.appendChild(item);
+            });
+
+            legend.addEventListener("click", event => {
+                const item = event.target.closest(".chart-legend-item");
+                if (item?.dataset.mode) toggleMode(item.dataset.mode);
+            });
+
+            if (lineOverlay) {
+                const lineItem = document.createElement("span");
+                lineItem.className = "chart-legend-item chart-legend-line";
+                lineItem.title = lineOverlay.label || lineOverlay.key || "line";
+                lineItem.innerHTML = `<span class="chart-legend-swatch chart-legend-swatch-line" style="border-color: ${lineOverlay.stroke || '#7c3aed'}"></span><span class="chart-legend-label">${trimChartLabel(lineOverlay.label || lineOverlay.key || 'line')}</span>`;
+                legend.appendChild(lineItem);
+            }
+
+            container.firstChild ? container.insertBefore(legend, container.firstChild) : container.appendChild(legend);
+            return legend;
+        };
+
+        const bindStackHover = (g, rows, lineData, keysNow) => {
+            const focus = g.select(".focus");
+            const overlay = g.select(".overlay");
+            const tip = focus.select(".focus-tip");
+
+            const hideFocus = () => focus.style("display", "none");
+
+            const showFocus = (event) => {
+                if (!rows.length || !state.x || !state.y) return;
+                const point = d3.pointer(event, overlay.node());
+                const row = nearestPoint(rows, state.x.invert(point[0]));
+                
+                if (!row) return hideFocus();
+
+                const cx = state.x(row.date);
+                const used = keysNow.filter(k => k !== "idle").reduce((sum, k) => sum + (row[k] || 0), 0);
+                const cy = state.y(used);
+                
+                let tipKeys = keysNow.filter(k => k !== "idle" && !state.hidden[k] && (row[k] || 0) > 0.01);
+                if (!tipKeys.length) tipKeys = keysNow.filter(k => k !== "idle" && (row[k] || 0) > 0.01);
+
+                focus.style("display", null);
+                focus.select(".focus-line-x").attr("x1", cx).attr("x2", cx).attr("y1", 0).attr("y2", state.innerH);
+                focus.select(".focus-line-y").attr("x1", 0).attr("x2", state.innerW).attr("y1", cy).attr("y2", cy);
+                focus.select(".focus-dot").attr("cx", cx).attr("cy", cy).attr("fill", colors[keysNow[0]] || "#62736F");
+
+                tip.selectAll("*").remove();
+                const lineRows = (lineOverlay && lineData?.length) ? 1 : 0;
+                const tipH = 30 + (tipKeys.length + lineRows) * 14;
+                const pos = labelPos(cx, cy, state.innerW, state.innerH, TIP_WIDTH, tipH);
+                const tipLabelX = pos.x;
+                const tipValueX = pos.x + TIP_WIDTH - 10;
+
+                tip.append("rect").attr("class", "focus-label-bg").attr("x", pos.x - 8).attr("y", pos.y - tipH + 6).attr("width", TIP_WIDTH).attr("height", tipH);
+                appendTipRow(tip, pos.y - tipH + 20, tipLabelX, tipValueX, trimChartLabel(stackTotalLabel), yFormat(used));
+
+                tipKeys.slice().reverse().forEach((key, i) => {
+                    const ty = pos.y - tipH + 34 + i * 14;
+                    appendTipRow(tip, ty, tipLabelX, tipValueX, displayLabel(key), yFormat(row[key] || 0));
+                });
+
+                if (lineOverlay && lineData?.length) {
+                    const linePoint = nearestPoint(lineData, row.date);
+                    if (linePoint && isFinite(linePoint.value)) {
+                        const ly = pos.y - tipH + 34 + tipKeys.length * 14;
+                        appendTipRow(tip, ly, tipLabelX, tipValueX, trimChartLabel(lineOverlay.label || lineOverlay.key), yFormat(linePoint.value));
+                    }
+                }
+            };
+
+            overlay.on("mousemove", showFocus).on("mouseenter", showFocus).on("mouseleave", hideFocus);
+        };
+
+        const render = (series, soft, windowRange, lineData) => {
+            syncLegend();
+            updateLegendStyles();
+            
+            state.lastSeries = series;
+            state.lastLineData = lineData || null;
+            state.lastWindow = windowRange;
+
+            const keysNow = activeKeys();
+            const dataKeysNow = activeDataKeys();
+            const rows = rowsFromSeries(series, dataKeysNow);
+            const width = Math.max(320, container.clientWidth);
+            const height = chartPlotHeight(container, true);
+            const margin = { top: 8, right: 8, bottom: 32, left: marginLeft };
+            const innerW = width - margin.left - margin.right;
+            const innerH = height - margin.top - margin.bottom;
+            const duration = soft ? TRANSITION_MS : 0;
+
+            if (!rows.length) {
+                d3.select(container).select("svg.chart-svg").remove();
+                state.rows = [];
+                if (!container.querySelector(".chart-empty")) {
+                    const empty = document.createElement("div");
+                    empty.className = "chart-empty";
+                    empty.textContent = "No data for this range";
+                    container.insertBefore(empty, container.querySelector(".chart-legend"));
+                }
+                return;
+            }
+
+            container.querySelector(".chart-empty")?.remove();
+
+            const endDate = windowRange?.end || d3.max(rows, d => d.date);
+            const startDate = windowRange?.start || d3.min(rows, d => d.date);
+            const maxStack = d3.max(rows, row => keysNow.reduce((sum, key) => sum + (row[key] || 0), 0)) || 0;
+            
+            let yTop = options.yMax ?? Math.max(maxStack * 1.12, maxStack + 0.05, 0.5);
+            if (options.yMax == null) {
+                state.yCeil = (!soft || state.yCeil === undefined) ? yTop : Math.max(state.yCeil * 0.998, yTop);
+                yTop = state.yCeil;
+            }
+            if (lineData?.length) yTop = Math.max(yTop, (d3.max(lineData, d => d.value) || 0) * 1.02);
+
+            const x = d3.scaleUtc().domain([startDate, endDate]).range([0, innerW]);
+            const y = d3.scaleLinear().domain([0, yTop]).range([innerH, 0]);
+            const stack = d3.stack().keys(keysNow)(rows);
+            
+            const area = d3.area()
+                .x(d => x(d.data.date))
+                .y0(d => y(d[0]))
+                .y1(d => y(d[1]))
+                .curve(d3.curveMonotoneX);
+
+            let svg = d3.select(container).select("svg.chart-svg");
+            
+            if (svg.empty()) {
+                svg = d3.select(container).append("svg").attr("class", "chart-svg")
+                    .attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`);
+                svg.append("defs").append("clipPath").attr("id", clipId).append("rect").attr("class", "clip-rect");
+                
+                const root = svg.append("g").attr("class", "plot").attr("transform", `translate(${margin.left},${margin.top})`);
+                root.append("g").attr("class", "y-axis");
+                root.append("g").attr("class", "grid-y");
+                root.append("g").attr("class", "x-axis");
+                root.append("g").attr("class", "data").attr("clip-path", `url(#${clipId})`).append("g").attr("class", "layers");
+                
+                const focus = root.append("g").attr("class", "focus").style("display", "none");
+                focus.append("line").attr("class", "focus-line-x");
+                focus.append("line").attr("class", "focus-line-y");
+                focus.append("circle").attr("class", "focus-dot").attr("r", 4);
+                focus.append("g").attr("class", "focus-tip");
+                
+                root.append("rect").attr("class", "overlay");
+            } else {
+                applySvgDimensions(svg, width, height, duration);
+            }
+
+            svg.select(".clip-rect").attr("width", innerW).attr("height", innerH);
+            const g = svg.select(".plot");
+            state.x = x; state.y = y; state.innerW = innerW; state.innerH = innerH; state.rows = rows;
+
+            g.select(".overlay").attr("width", innerW).attr("height", innerH).attr("x", 0).attr("y", 0);
+
+            renderYAxis(g, y, duration, yAxisFormat, innerW);
+            renderXAxis(g, x, innerH, duration);
+
+            const layers = g.select(".data .layers").selectAll(".layer").data(stack, d => d.key);
+            layers.exit().transition().duration(duration).ease(ease).style("opacity", 0).remove();
+            
+            layers.enter()
+                .append("path").attr("class", "layer")
+                .attr("fill", d => d.key === "idle" ? "transparent" : (colors[d.key] || "#9ca3af"))
+                .attr("stroke", "none").style("opacity", 0)
+                .merge(layers)
+                .transition().duration(duration).ease(ease)
+                .style("opacity", d => d.key === "idle" ? 0 : (state.hidden[d.key] ? 0.12 : 0.82))
+                .attr("fill", d => d.key === "idle" ? "transparent" : (colors[d.key] || "#9ca3af"))
+                .attr("d", area);
+
+            if (lineOverlay && lineData?.length) {
+                const lineGen = d3.line()
+                    .defined(d => isFinite(d.value))
+                    .x(d => x(d.date))
+                    .y(d => y(d.value))
+                    .curve(d3.curveMonotoneX);
+                    
+                let linePath = g.select(".data").select(".overlay-line");
+                if (linePath.empty()) linePath = g.select(".data").append("path").attr("class", "overlay-line");
+                
+                if (soft && state.lastLineData?.length) {
+                    linePath.interrupt().transition().duration(duration).ease(ease).attrTween("d", tweenPath(lineGen, state.lastLineData, lineData));
+                } else {
+                    linePath.interrupt().datum(lineData).attr("d", lineGen);
+                }
+                
+                linePath.attr("fill", "none")
+                    .attr("stroke", lineOverlay.stroke || "#7c3aed")
+                    .attr("stroke-width", lineOverlay.strokeWidth || 2)
+                    .attr("stroke-linejoin", "round")
+                    .attr("stroke-linecap", "round")
+                    .style("pointer-events", "none");
+            } else {
+                g.select(".data").select(".overlay-line").remove();
+            }
+
+            bindStackHover(g, rows, lineData, keysNow);
+        };
+
+        return {
+            render,
+            reset: () => {
+                state.rows = []; state.lastSeries = null; state.lastLineData = null;
+                state.lastWindow = null; state.hidden = {}; state.yCeil = undefined;
+                container.querySelector(".chart-legend")?.remove();
+                container.classList.remove("chart-box-stacked");
+            }
+        };
+    };
+
+    const createMultiLineRenderer = (container, options = {}) => {
+        let keys = options.keys || [];
+        const colors = options.colors || {};
+        const colorPool = options.colorPool || ["#c2410c", "#0891b2", "#059669", "#7c3aed", "#ca8a04"];
+        const labelFormat = options.labelFormat || (key => key);
+        const displayLabel = (key) => trimChartLabel(labelFormat(key));
+        const yFormat = options.yFormat || (v => `${v.toFixed(1)}%`);
+        const yAxisFormat = options.yAxisFormat || yFormat;
+        const marginLeft = options.marginLeft ?? 12;
+        const clipId = `chart-clip-${++clipSeq}`;
+
+        const state = {
+            rows: [], lastSeries: null, lastWindow: null,
+            hidden: {}, x: null, y: null, innerW: 0, innerH: 0, yCeil: undefined
+        };
+
+        const colorFor = (key, index) => colors[key] || colorPool[index % colorPool.length];
+
+        const syncLegend = () => {
+            container.classList.add("chart-box-multiline");
+            let legend = container.querySelector(".chart-legend");
+            if (!legend) {
+                legend = document.createElement("div");
+                legend.className = "chart-legend";
+                legend.addEventListener("click", event => {
+                    const item = event.target.closest(".chart-legend-item");
+                    if (item?.dataset.mode) {
+                        state.hidden[item.dataset.mode] = !state.hidden[item.dataset.mode];
+                        syncLegendStyles();
+                        if (state.lastSeries && state.lastWindow) render(state.lastSeries, true, state.lastWindow);
+                    }
+                });
+                container.firstChild ? container.insertBefore(legend, container.firstChild) : container.appendChild(legend);
+            }
+
+            const signature = keys.join("\0");
+            if (legend.dataset.signature !== signature) {
+                legend.dataset.signature = signature;
+                legend.innerHTML = "";
+                keys.forEach((key, index) => {
+                    const item = document.createElement("span");
+                    item.className = "chart-legend-item";
+                    item.dataset.mode = key;
+                    item.title = labelFormat(key);
+                    item.innerHTML = `<span class="chart-legend-swatch chart-legend-swatch-line" style="border-color: ${colorFor(key, index)}"></span><span class="chart-legend-label">${displayLabel(key)}</span>`;
+                    legend.appendChild(item);
+                });
+            }
+            syncLegendStyles();
+        };
+
+        const syncLegendStyles = () => {
+            container.querySelectorAll(".chart-legend-item").forEach(item => {
+                item.classList.toggle("hidden", !!state.hidden[item.dataset.mode]);
+            });
+        };
+
+        const bindHover = (g, rows) => {
+            const focus = g.select(".focus");
+            const overlay = g.select(".overlay");
+            const tip = focus.select(".focus-tip");
+
+            const hideFocus = () => focus.style("display", "none");
+
+            const showFocus = (event) => {
+                if (!rows.length || !state.x || !state.y) return;
+                const point = d3.pointer(event, overlay.node());
+                const row = nearestPoint(rows, state.x.invert(point[0]));
+                if (!row) return hideFocus();
+
+                const visibleKeys = keys.filter(key => !state.hidden[key] && (row[key] || 0) > 0.001);
+                const tipKeys = visibleKeys.length ? visibleKeys : keys.filter(key => (row[key] || 0) > 0.001);
+                const maxVal = tipKeys.reduce((max, key) => Math.max(max, row[key] || 0), 0);
+                const cx = state.x(row.date);
+                const cy = state.y(maxVal);
+                const tipH = 24 + tipKeys.length * 14;
+                const pos = labelPos(cx, cy, state.innerW, state.innerH, TIP_WIDTH, tipH);
+                const tipLabelX = pos.x;
+                const tipValueX = pos.x + TIP_WIDTH - 10;
+
+                focus.style("display", null);
+                focus.select(".focus-line-x").attr("x1", cx).attr("x2", cx).attr("y1", 0).attr("y2", state.innerH);
+                focus.select(".focus-line-y").attr("x1", 0).attr("x2", state.innerW).attr("y1", cy).attr("y2", cy);
+                focus.select(".focus-dot").attr("cx", cx).attr("cy", cy).attr("fill", colorFor(tipKeys[0] || keys[0], 0));
+
+                tip.selectAll("*").remove();
+                tip.append("rect").attr("class", "focus-label-bg").attr("x", pos.x - 8).attr("y", pos.y - tipH + 6).attr("width", TIP_WIDTH).attr("height", tipH);
+
+                tipKeys.slice().reverse().forEach((key, i) => {
+                    const ty = pos.y - tipH + 20 + i * 14;
+                    appendTipRow(tip, ty, tipLabelX, tipValueX, displayLabel(key), yFormat(row[key] || 0));
+                });
+            };
+
+            overlay.on("mousemove", showFocus).on("mouseenter", showFocus).on("mouseleave", hideFocus);
+        };
+
+        const render = (series, soft, windowRange) => {
+            keys = options.keys || Object.keys(series || {});
+            syncLegend();
+
+            state.lastSeries = series;
+            state.lastWindow = windowRange;
+
+            const rows = rowsFromSeries(series, keys);
+            const width = Math.max(320, container.clientWidth);
+            const height = chartPlotHeight(container, true);
+            const margin = { top: 8, right: 8, bottom: 32, left: marginLeft };
+            const innerW = width - margin.left - margin.right;
+            const innerH = height - margin.top - margin.bottom;
+            const duration = soft ? TRANSITION_MS : 0;
+
+            if (!rows.length) {
+                d3.select(container).select("svg.chart-svg").remove();
+                state.rows = [];
+                if (!container.querySelector(".chart-empty")) {
+                    const empty = document.createElement("div");
+                    empty.className = "chart-empty";
+                    empty.textContent = "No container CPU data for this range";
+                    container.insertBefore(empty, container.querySelector(".chart-legend"));
+                }
+                return;
+            }
+
+            container.querySelector(".chart-empty")?.remove();
+
+            const endDate = windowRange?.end || d3.max(rows, d => d.date);
+            const startDate = windowRange?.start || d3.min(rows, d => d.date);
+            const maxVal = d3.max(rows, row => keys.reduce((max, key) => Math.max(max, row[key] || 0), 0)) || 0;
+            let yTop = options.yMax ?? Math.max(maxVal * 1.12, maxVal + 0.05, 0.5);
+            if (options.yMax == null) {
+                state.yCeil = (!soft || state.yCeil === undefined) ? yTop : Math.max(state.yCeil * 0.998, yTop);
+                yTop = state.yCeil;
+            }
+
+            const x = d3.scaleUtc().domain([startDate, endDate]).range([0, innerW]);
+            const y = d3.scaleLinear().domain([0, yTop]).range([innerH, 0]);
+            const lineGen = d3.line()
+                .defined(d => isFinite(d.value))
+                .x(d => x(d.date))
+                .y(d => y(d.value))
+                .curve(d3.curveMonotoneX);
+
+            let svg = d3.select(container).select("svg.chart-svg");
+            if (svg.empty()) {
+                svg = d3.select(container).append("svg").attr("class", "chart-svg")
+                    .attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`);
+                svg.append("defs").append("clipPath").attr("id", clipId).append("rect").attr("class", "clip-rect");
+                const root = svg.append("g").attr("class", "plot").attr("transform", `translate(${margin.left},${margin.top})`);
+                root.append("g").attr("class", "y-axis");
+                root.append("g").attr("class", "grid-y");
+                root.append("g").attr("class", "x-axis");
+                root.append("g").attr("class", "data").attr("clip-path", `url(#${clipId})`).append("g").attr("class", "lines");
+                const focus = root.append("g").attr("class", "focus").style("display", "none");
+                focus.append("line").attr("class", "focus-line-x");
+                focus.append("line").attr("class", "focus-line-y");
+                focus.append("circle").attr("class", "focus-dot").attr("r", 4);
+                focus.append("g").attr("class", "focus-tip");
+                root.append("rect").attr("class", "overlay");
+            } else {
+                applySvgDimensions(svg, width, height, duration);
+            }
+
+            svg.select(".clip-rect").attr("width", innerW).attr("height", innerH);
+            const g = svg.select(".plot");
+            state.x = x; state.y = y; state.innerW = innerW; state.innerH = innerH; state.rows = rows;
+
+            g.select(".overlay").attr("width", innerW).attr("height", innerH).attr("x", 0).attr("y", 0);
+            renderYAxis(g, y, duration, yAxisFormat, innerW);
+            renderXAxis(g, x, innerH, duration);
+
+            const lineData = keys.map((key, index) => ({
+                key,
+                color: colorFor(key, index),
+                points: (series[key] || []).filter(d => isFinite(d.value))
+            }));
+
+            const paths = g.select(".data .lines").selectAll(".series-line").data(lineData, d => d.key);
+            paths.exit().transition().duration(duration).ease(ease).style("opacity", 0).remove();
+
+            paths.enter()
+                .append("path")
+                .attr("class", "series-line")
+                .attr("fill", "none")
+                .attr("stroke-width", 2)
+                .attr("stroke-linejoin", "round")
+                .attr("stroke-linecap", "round")
+                .style("opacity", 0)
+                .merge(paths)
+                .attr("stroke", d => d.color)
+                .transition().duration(duration).ease(ease)
+                .style("opacity", d => state.hidden[d.key] ? 0.15 : 0.9)
+                .attr("d", d => lineGen(d.points));
+
+            bindHover(g, rows);
+        };
+
+        return {
+            render,
+            reset: () => {
+                state.rows = [];
+                state.lastSeries = null;
+                state.lastWindow = null;
+                state.hidden = {};
+                state.yCeil = undefined;
+                container.querySelector(".chart-legend")?.remove();
+                container.classList.remove("chart-box-multiline");
+            }
+        };
+    };
+
+    return { createRenderer, createStackedRenderer, createMultiLineRenderer, TRANSITION_MS };
+})();
+</script>
+{{ end }}

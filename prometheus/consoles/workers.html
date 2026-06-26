@@ -1,0 +1,169 @@
+{{ $hosts := query "node_info{job=\"coroot_node_agent\"}" }}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workers</title>
+    <script>const PATH_PREFIX = "{{ pathPrefix }}";</script>
+    {{template "workers_base_css" .}}
+    <style>
+        .page-meta { font-size: 14px; color: var(--muted); margin: 0 0 24px; }
+        .table-wrap { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 12px 16px; border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap; }
+        td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:hover td { background: #f9fafb; }
+        
+        .status { display: inline-flex; align-items: center; gap: 6px; }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
+            transition: background-color 0.5s var(--ease), box-shadow 0.5s var(--ease);
+        }
+        .status-dot.up { background: var(--ok); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+        .status-dot.down { background: var(--crit); box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+        .status-text, .uptime-text { transition: color 0.4s var(--ease), opacity 0.4s var(--ease); }
+        
+        .progress { min-width: 88px; height: 18px; border-radius: 3px; background: var(--bar-bg); position: relative; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--ok); width: 0; transition: width var(--live-ms) var(--ease), background-color 0.5s var(--ease); }
+        .progress-fill.warn { background: var(--warn); }
+        .progress-fill.crit { background: var(--crit); }
+        .progress-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-variant-numeric: tabular-nums; transition: opacity 0.4s var(--ease); }
+        td.metric-cpu { min-width: 104px; }
+
+        .net { display: flex; flex-direction: column; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .net span { transition: opacity 0.4s var(--ease); }
+        .value-changing { opacity: 0.65; }
+    </style>
+</head>
+<body>
+
+<h1>Workers</h1>
+<p class="page-meta" id="workersSummary"><span class="live-dot"></span>Loading metrics…</p>
+
+<div class="table-wrap">
+    <table id="nodesTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>IP</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Network</th>
+                <th>OS</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{ range $h := $hosts }}
+        {{ $instance := label "instance" $h }}
+        {{ $hostip := stripPort $instance }}
+        {{ $hostname := label "hostname" $h }}
+        {{ if eq $hostname "" }}
+            {{ $hostname = stripDomain $hostip }}
+        {{ end }}
+        <tr class="worker-row" data-instance="{{ $instance }}">
+            <td>
+                <a href="worker_detail.html?instance={{ urlquery $instance }}&amp;hostname={{ urlquery $hostname }}">{{ $hostname }}</a>
+            </td>
+            <td>
+                <span class="status">
+                    <span class="status-dot"></span>
+                    <span class="status-text muted">…</span>
+                    <span class="uptime-text muted"></span>
+                </span>
+            </td>
+            <td class="tabular">{{ $hostip }}</td>
+            <td class="metric-cpu">
+                <div class="progress">
+                    <div class="progress-fill"></div>
+                    <span class="progress-label muted">—</span>
+                </div>
+            </td>
+            <td class="metric-mem">
+                <div class="progress">
+                    <div class="progress-fill"></div>
+                    <span class="progress-label muted">—</span>
+                </div>
+            </td>
+            <td class="metric-net net">
+                <span>↓ <span class="val-rx muted">…</span></span>
+                <span>↑ <span class="val-tx muted">…</span></span>
+            </td>
+            <td class="muted">{{ label "kernel_version" $h }}</td>
+        </tr>
+        {{ else }}
+        <tr>
+            <td colspan="7" class="empty-state">No node_agent targets found</td>
+        </tr>
+        {{ end }}
+        </tbody>
+    </table>
+</div>
+
+{{template "workers_api_js" .}}
+{{template "workers_live_js" .}}
+<script>
+(() => {
+    const { MaandProm: api, MaandLive: live, MaandMetrics: metrics, MaandCpuModes: cpuModes } = window;
+    const rows = Array.from(document.querySelectorAll(".worker-row"));
+    const summary = document.getElementById("workersSummary");
+
+    if (!summary) return;
+    if (!rows.length) {
+        summary.textContent = "No workers";
+        return;
+    }
+
+    const refresh = async () => {
+        const parts = await Promise.all([
+            api.fetchInstant(metrics.upExpr()),
+            api.fetchInstant(cpuModes.allInstancesTotalExpr()),
+            api.fetchInstant(metrics.memoryAllExpr()),
+            api.fetchInstant(metrics.netRxAllExpr()),
+            api.fetchInstant(metrics.netTxAllExpr()),
+            api.fetchInstant(metrics.uptimeExpr())
+        ]);
+
+        const [upData, cpuTotalData, memData, rxData, txData, uptimeData] = parts;
+        const up = api.byInstance(upData);
+        const cpuTotal = api.byInstance(cpuTotalData);
+        const mem = api.byInstance(memData);
+        const rx = api.byInstance(rxData);
+        const tx = api.byInstance(txData);
+        const uptime = api.byInstance(uptimeData);
+        
+        let upCount = 0;
+
+        rows.forEach(row => {
+            const inst = row.getAttribute("data-instance");
+            const isUp = up[inst] === 1;
+            if (isUp) upCount++;
+
+            const dot = row.querySelector(".status-dot");
+            const statusText = row.querySelector(".status-text");
+            const uptimeText = row.querySelector(".uptime-text");
+            
+            dot.className = `status-dot ${isUp ? "up" : "down"}`;
+            live.setText(statusText, isUp ? "up" : "down");
+            statusText.classList.toggle("muted", !isUp);
+            live.setText(uptimeText, uptime[inst] != null ? ` · ${api.formatUptime(uptime[inst])}` : "");
+
+            live.updateProgress(row.querySelector(".metric-cpu"), cpuTotal[inst]);
+            live.updateProgress(row.querySelector(".metric-mem"), mem[inst]);
+
+            const rxEl = row.querySelector(".val-rx");
+            const txEl = row.querySelector(".val-tx");
+            live.setText(rxEl, api.formatNetSpeed(rx[inst] || 0));
+            live.setText(txEl, api.formatNetSpeed(tx[inst] || 0));
+            rxEl.classList.remove("muted");
+            txEl.classList.remove("muted");
+        });
+
+        summary.innerHTML = `<span class="live-dot"></span>${upCount} of ${rows.length} workers up · live`;
+    };
+
+    live.startLoop(refresh);
+})();
+</script>
+{{template "workers_tail" .}}

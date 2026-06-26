@@ -1,0 +1,41 @@
+{
+  "version": "1.1.0",
+  "selectors": ["clickhouse"],
+  "resources": {
+    "ports": {
+      "clickhouse_port_https": {},
+      "clickhouse_port_interserver_tls": {},
+      "clickhouse_port_native_tls": {},
+      "clickhouse_port_metrics": {}
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "http", "port": "clickhouse_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 30, "interval_seconds": 1 }
+  },
+  "certs": {
+    "server": {
+      "pkcs8": false,
+      "one": false,
+      "subject": {
+        "common_name": "clickhouse"
+      }
+    }
+  },
+  "commands": {
+    "command_ensure_secrets": {
+      "executed_on": ["post_build"]
+    },
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    }
+  }
+}

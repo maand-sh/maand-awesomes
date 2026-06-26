@@ -1,0 +1,38 @@
+{
+  "version": "1.0.12",
+  "selectors": ["otel_collector"],
+  "resources": {
+    "memory": { "min": "256 mb", "max": "1024 mb" },
+    "ports": {
+      "otel_collector_port_grpc": 4317,
+      "otel_collector_port_http": 4318,
+      "otel_collector_port_metrics": 8888,
+      "otel_collector_port_health": 13133
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "http", "port": "otel_collector_port_health", "path": "/", "expect_status": 200 }
+    ],
+    "timeout_seconds": 5,
+    "wait": { "attempts": 60, "interval_seconds": 2 }
+  },
+  "commands": {
+    "command_wait_clickhouse": {
+      "executed_on": ["pre_deploy"],
+      "demands": {
+        "job": "clickhouse",
+        "command": "command_service",
+        "config": {}
+      }
+    },
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    }
+  }
+}

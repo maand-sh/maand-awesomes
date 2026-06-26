@@ -1,0 +1,30 @@
+{
+  "version": "2.0.5",
+  "selectors": ["vault", "a"],
+  "deploy_parallel_count": 1,
+  "update_parallel_count": 1,
+  "resources": {
+    "ports": {
+      "vault_port_api": 8200,
+      "vault_port_cluster": 8201
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "vault_port_api" }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 60, "interval_seconds": 5 }
+  },
+  "commands": {
+    "command_plan_order": {
+      "executed_on": ["pre_deploy"]
+    },
+    "command_node_up": {
+      "executed_on": ["after_allocation_started"]
+    },
+    "command_unseal": {
+      "executed_on": ["cli"]
+    }
+  }
+}

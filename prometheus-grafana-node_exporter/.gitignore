@@ -1,5 +1,0 @@
-venv
-data/*
-secrets/*
-.idea
-.DS_Store

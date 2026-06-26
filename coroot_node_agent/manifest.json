@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "selectors": ["worker"],
+  "update_parallel_count": 4,
+  "resources": {
+    "memory": { "min": "128 mb", "max": "512 mb" },
+    "ports": {
+      "coroot_node_agent_port_metrics": {}
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "http", "port": "coroot_node_agent_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 5,
+    "wait": { "attempts": 60, "interval_seconds": 2 }
+  }
+}

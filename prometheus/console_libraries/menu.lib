@@ -1,0 +1,7 @@
+{{/* Empty menu/navbar stubs — custom dashboards use ui.lib instead. */}}
+
+{{ define "navbar" }}
+{{ end }}
+
+{{ define "menu" }}
+{{ end }}

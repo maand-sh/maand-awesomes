@@ -1,0 +1,32 @@
+{{/* Minimal Prometheus console library stubs for compatibility. */}}
+
+{{ define "head" -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>var PATH_PREFIX = "{{ pathPrefix }}";</script>
+</head>
+<body>
+{{ end }}
+
+{{ define "tail" }}
+</body>
+</html>
+{{ end }}
+
+{{ define "prom_content_head" }}
+{{ end }}
+
+{{ define "prom_content_tail" }}
+{{ end }}
+
+{{ define "prom_right_table_head" }}
+{{ end }}
+
+{{ define "prom_right_table_tail" }}
+{{ end }}
+
+{{ define "prom_graph_timecontrol" }}
+{{ end }}

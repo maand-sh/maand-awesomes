@@ -1,0 +1,9 @@
+<clickhouse>
+    <timezone>UTC</timezone>
+    <mlock_executable>true</mlock_executable>
+    <max_connections>2048</max_connections>
+    <keep_alive_timeout>30</keep_alive_timeout>
+    <max_concurrent_queries>164</max_concurrent_queries>
+    <max_table_size_to_drop>50000000000</max_table_size_to_drop>
+    <max_partition_size_to_drop>50000000000</max_partition_size_to_drop>
+</clickhouse>

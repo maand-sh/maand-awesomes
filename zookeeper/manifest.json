@@ -1,0 +1,53 @@
+{
+  "version": "1.0.2",
+  "selectors": ["zookeeper"],
+  "deploy_parallel_count": 1,
+  "update_parallel_count": 1,
+  "certs": {
+    "quorum": {
+      "pkcs8": true,
+      "one": false,
+      "subject": {
+        "common_name": "zookeeper"
+      }
+    }
+  },
+  "resources": {
+    "memory": { "min": "512 mb", "max": "3584 mb" },
+    "ports": {
+      "zookeeper_port_client": {},
+      "zookeeper_port_follower": {},
+      "zookeeper_port_election": {},
+      "zookeeper_port_metrics": {}
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "zookeeper_port_client" },
+      { "type": "http", "port": "zookeeper_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 5,
+    "wait": { "attempts": 60, "interval_seconds": 2 }
+  },
+  "commands": {
+    "command_plan_order": {
+      "executed_on": ["pre_deploy"]
+    },
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    },
+    "command_cluster_status": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    }
+  }
+}

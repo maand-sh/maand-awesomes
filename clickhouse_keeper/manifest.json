@@ -1,0 +1,37 @@
+{
+  "version": "1.0.5",
+  "selectors": ["clickhouse_keeper"],
+  "resources": {
+    "ports": {
+      "clickhouse_keeper_port_client_tls": {},
+      "clickhouse_keeper_port_raft": {},
+      "clickhouse_keeper_port_metrics": {}
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "http", "port": "clickhouse_keeper_port_metrics", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 10,
+    "wait": { "attempts": 30, "interval_seconds": 1 }
+  },
+  "certs": {
+    "server": {
+      "pkcs8": false,
+      "one": false,
+      "subject": {
+        "common_name": "clickhouse-keeper"
+      }
+    }
+  },
+  "commands": {
+    "command_service": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
+    }
+  }
+}
