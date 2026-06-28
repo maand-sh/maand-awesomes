@@ -6,9 +6,10 @@ groups:
         expr: up{maand_job="zookeeper"} == 0
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: critical
         annotations:
-          summary: "zookeeper metrics down on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] metrics down on {{ $labels.instance }}"
           description: "prometheus cannot scrape zookeeper /metrics on {{ $labels.instance }} for more than 5 minutes"
           runbook: zookeeper_metrics_down
 
@@ -16,9 +17,10 @@ groups:
         expr: count(up{maand_job="zookeeper"} == 1) < 2
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: critical
         annotations:
-          summary: "zookeeper quorum at risk"
+          summary: "[{{ $labels.maand_job }}] quorum at risk"
           description: "fewer than 2 zookeeper nodes are reachable ({{ $value }} up)"
           runbook: zookeeper_quorum_at_risk
 
@@ -29,9 +31,10 @@ groups:
         expr: zookeeper_avg_latency > 100
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper avg latency high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] avg latency high on {{ $labels.instance }}"
           description: "average request latency is {{ $value | printf \"%.0f\" }} ms (instance {{ $labels.instance }})"
           runbook: zookeeper_latency_high
 
@@ -39,9 +42,10 @@ groups:
         expr: rate(zookeeper_fsynctime_sum[1m]) > 100
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper fsync slow on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] fsync slow on {{ $labels.instance }}"
           description: "fsync time rate is {{ $value | printf \"%.0f\" }} (instance {{ $labels.instance }})"
           runbook: zookeeper_latency_high
 
@@ -49,9 +53,10 @@ groups:
         expr: rate(zookeeper_snapshottime_sum[5m]) > 100
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper snapshot slow on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] snapshot slow on {{ $labels.instance }}"
           description: "snapshot time rate is {{ $value | printf \"%.0f\" }} (instance {{ $labels.instance }})"
           runbook: zookeeper_latency_high
 
@@ -62,9 +67,10 @@ groups:
         expr: zookeeper_num_alive_connections > 200
         for: 10m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper connections high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] connections high on {{ $labels.instance }}"
           description: "{{ $value | printf \"%.0f\" }} client connections (maxClientCnxns=256) on {{ $labels.instance }}"
           runbook: zookeeper_connections_high
 
@@ -72,9 +78,10 @@ groups:
         expr: zookeeper_open_file_descriptor_count > 300
         for: 10m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper open file descriptors high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] open file descriptors high on {{ $labels.instance }}"
           description: "{{ $value | printf \"%.0f\" }} open file descriptors on {{ $labels.instance }}"
           runbook: zookeeper_connections_high
 
@@ -82,9 +89,10 @@ groups:
         expr: zookeeper_jvm_memory_bytes_used / zookeeper_jvm_memory_bytes_max{area="heap"} > 0.85
         for: 5m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper JVM heap high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] JVM heap high on {{ $labels.instance }}"
           description: "JVM heap usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
           runbook: zookeeper_jvm_memory_high
 
@@ -95,9 +103,10 @@ groups:
         expr: increase(zookeeper_election_time_count[5m]) > 0
         for: 0m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper leader election on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] leader election on {{ $labels.instance }}"
           description: "a leader election occurred on {{ $labels.instance }}"
           runbook: zookeeper_leader_election
 
@@ -105,9 +114,10 @@ groups:
         expr: zookeeper_znode_count > 1000000
         for: 10m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper znode count high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] znode count high on {{ $labels.instance }}"
           description: "{{ $value | printf \"%.0f\" }} znodes on {{ $labels.instance }}"
           runbook: zookeeper_data_growth
 
@@ -115,9 +125,10 @@ groups:
         expr: zookeeper_approximate_data_size / 1024 / 1024 > 1024
         for: 10m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper data size high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] data size high on {{ $labels.instance }}"
           description: "approximate data size is {{ $value | printf \"%.0f\" }} MB on {{ $labels.instance }}"
           runbook: zookeeper_data_growth
 
@@ -125,8 +136,9 @@ groups:
         expr: zookeeper_watch_count > 10000
         for: 10m
         labels:
+          maand_job: zookeeper
           severity: warning
         annotations:
-          summary: "zookeeper watch count high on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] watch count high on {{ $labels.instance }}"
           description: "{{ $value | printf \"%.0f\" }} watches on {{ $labels.instance }}"
           runbook: zookeeper_data_growth

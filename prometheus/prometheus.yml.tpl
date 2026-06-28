@@ -4,6 +4,9 @@ global:
 
 scrape_configs:
   - job_name: prometheus
+    basic_auth:
+      username: {{ getSecret "admin_username" }}
+      password: {{ getSecret "admin_password" }}
     static_configs:
       - targets: ['{{ .WorkerIP }}:{{ get "maand/bucket" "prometheus_port_http" }}']
 {{ scrapeConfigs }}

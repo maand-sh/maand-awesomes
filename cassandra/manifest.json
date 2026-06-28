@@ -39,6 +39,14 @@
         "command": "",
         "config": {}
       }
+    },
+    "command_update_admin_password": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
     }
   },
   "health_check": {

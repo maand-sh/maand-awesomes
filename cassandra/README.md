@@ -95,6 +95,7 @@ On first deploy, `command_y_init_admin` sets the password on the seed node after
 | `Makefile` | Downloads javaagent jar; cert permissions; `start` / `stop` / `restart` |
 | `_modules/command_wait_up.py` | Waits for `nodetool status` → UN after each node starts |
 | `_modules/command_y_init_admin.py` | Sets admin password on seed (index 0) |
+| `_modules/command_update_admin_password.py` | CLI: rotate admin password |
 | `_modules/command_cluster_status.py` | CLI ring overview |
 
 ### Network
@@ -148,6 +149,7 @@ cassandra_clientrequest_latency_seconds{scope="Read",quantile="0.99"}
 | `command_ensure_secrets` | post_build | Generate admin credentials (seed only) |
 | `command_wait_up` | after_allocation_started | Block until node is UN |
 | `command_y_init_admin` | after_allocation_started | Apply admin password on seed |
+| `command_update_admin_password` | CLI | Rotate admin password in cluster and KV |
 | `command_cluster_status` | CLI | Print `nodetool status` from seed |
 
 ### Cluster status
@@ -157,6 +159,14 @@ maand job_command cassandra command_cluster_status
 ```
 
 Runs meaningful output from allocation index 0 only.
+
+### Rotate admin password
+
+```bash
+maand job_command cassandra command_update_admin_password
+```
+
+Generates a new random password, applies it on the seed node via `ALTER ROLE`, updates `secrets/job/cassandra`, and refreshes `.env` on every cassandra worker. No redeploy required.
 
 ## Operations
 

@@ -14,8 +14,10 @@ services:
       - ./consoles:/etc/prometheus/consoles:z
       - ./console_libraries:/etc/prometheus/console_libraries:z
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./web.config.yml:/etc/prometheus/web.config.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.config.file=/etc/prometheus/web.config.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.console.libraries=/etc/prometheus/console_libraries'

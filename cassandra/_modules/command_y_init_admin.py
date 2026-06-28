@@ -4,66 +4,44 @@
 from __future__ import annotations
 
 import os
-import shlex
 import sys
 import time
 
-import maand
 import cassandra_lib as cs
 
 WAIT_TIMEOUT = 900
 WAIT_INTERVAL = 10
+DEFAULT_PASSWORD = "cassandra"
 
 
-def cql_escape(value: str) -> str:
-    return value.replace("'", "''")
-
-
-def cqlsh(host: str, username: str, password: str, cql: str):
-    port = cs.cql_port()
-    cmd = (
-        f"docker exec cassandra cqlsh 127.0.0.1 {port} "
-        f"-u {shlex.quote(username)} -p {shlex.quote(password)} "
-        f"-e {shlex.quote(cql)}"
-    )
-    return maand.run_ssh(host, cmd, check=False, timeout=60)
-
-
-def credentials_ready(host: str, username: str, password: str) -> bool:
-    result = cqlsh(host, username, password, "SELECT release_version FROM system.local")
-    return result.returncode == 0
-
-
-def wait_for_cql(host: str, username: str, password: str) -> bool:
+def wait_for_cql_auth(host: str, username: str, password: str) -> str | None:
+    """Wait for CQL auth. Returns 'configured', 'default', or None on timeout."""
     deadline = time.time() + WAIT_TIMEOUT
     while time.time() < deadline:
-        if credentials_ready(host, username, password):
-            return True
+        if cs.credentials_ready(host, username, password):
+            return "configured"
+        if password != DEFAULT_PASSWORD and cs.credentials_ready(host, username, DEFAULT_PASSWORD):
+            return "default"
         cs.log(f"still waiting for CQL on {host}:{cs.cql_port()} ...")
         time.sleep(WAIT_INTERVAL)
-    return False
+    return None
 
 
 def apply_admin_password(host: str, username: str, password: str) -> int:
-    if credentials_ready(host, username, password):
-        cs.log("admin credentials already configured")
-        return 0
-
     cs.log("waiting for CQL on seed before applying admin password ...")
-    if not wait_for_cql(host, "cassandra", "cassandra"):
+    state = wait_for_cql_auth(host, username, password)
+    if state is None:
         sys.stderr.write(f"CQL not ready on {host} within {WAIT_TIMEOUT}s\n")
         return 1
 
-    cql = f"ALTER ROLE {username} WITH PASSWORD = '{cql_escape(password)}'"
-    result = cqlsh(host, "cassandra", "cassandra", cql)
-    if result.returncode != 0:
-        err = (result.stderr or result.stdout or "").strip()
-        sys.stderr.write(f"failed to set admin password on {host}: {err}\n")
-        return result.returncode or 1
+    if state == "configured":
+        cs.log("admin credentials already configured")
+        return 0
 
-    if not credentials_ready(host, username, password):
-        sys.stderr.write(f"admin credentials not accepted on {host} after ALTER ROLE\n")
-        return 1
+    code, err = cs.alter_admin_password(host, username, DEFAULT_PASSWORD, password)
+    if code != 0:
+        sys.stderr.write(f"failed to set admin password on {host}: {err}\n")
+        return code
 
     cs.log("admin credentials configured on seed")
     return 0

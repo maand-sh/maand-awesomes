@@ -1,5 +1,5 @@
 {
-    "version": "1.0.1",
+    "version": "1.0.2",
     "resources": {
         "memory": { "min": "512 mb", "max": "2048 mb" },
         "cpu": { "min": "1200 mhz", "max": "4800 mhz" },
@@ -7,10 +7,15 @@
             "prometheus_port_http": {}
         }
     },
+    "commands": {
+        "command_ensure_secrets": {
+            "executed_on": ["post_build"]
+        },
+        "command_health_check": {
+            "executed_on": ["health_check"]
+        }
+    },
     "health_check": {
-        "checks": [
-            { "type": "http", "port": "prometheus_port_http", "path": "/-/healthy", "expect_status": 200 }
-        ],
         "timeout_seconds": 5,
         "wait": { "attempts": 60, "interval_seconds": 2 }
     }

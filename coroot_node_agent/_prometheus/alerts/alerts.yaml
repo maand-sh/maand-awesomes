@@ -2,20 +2,21 @@ groups:
   # ── Availability ─────────────────────────────────────────────────────────────
   - name: job_availability
     rules:
-      - alert: job down
-        expr: up == 0
+      - alert: coroot_node_agent job down
+        expr: up{maand_job="coroot_node_agent"} == 0
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "job {{ $labels.instance }} down"
+          summary: "[{{ $labels.maand_job }}] job {{ $labels.instance }} down"
           description: "scrape target {{ $labels.instance }} has been unreachable for more than 5 minutes"
           runbook: job_down
 
   # ── CPU ──────────────────────────────────────────────────────────────────────
   - name: node_agent_cpu
     rules:
-      - alert: high cpu usage
+      - alert: coroot_node_agent high cpu usage
         expr: |
           (
             1 - sum by(instance) (rate(node_resources_cpu_usage_seconds_total{mode="idle"}[5m]))
@@ -23,13 +24,14 @@ groups:
           ) * 100 > 85
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "high CPU usage on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] high CPU usage on {{ $labels.instance }}"
           description: "CPU usage is {{ $value | printf \"%.1f\" }}% (instance {{ $labels.instance }})"
           runbook: high_cpu_usage
 
-      - alert: critical cpu usage
+      - alert: coroot_node_agent critical cpu usage
         expr: |
           (
             1 - sum by(instance) (rate(node_resources_cpu_usage_seconds_total{mode="idle"}[5m]))
@@ -37,84 +39,91 @@ groups:
           ) * 100 > 95
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "critical CPU usage on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] critical CPU usage on {{ $labels.instance }}"
           description: "CPU usage is {{ $value | printf \"%.1f\" }}% (instance {{ $labels.instance }})"
           runbook: high_cpu_usage
 
-      - alert: high io wait
+      - alert: coroot_node_agent high io wait
         expr: |
           rate(container_resources_io_pressure_waiting_seconds_total{kind="full"}[5m]) > 0.3
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "high I/O pressure on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] high I/O pressure on {{ $labels.instance }}"
           description: "PSI full I/O stall rate is {{ $value | printf \"%.2f\" }}s/s on container {{ $labels.container_id }} (instance {{ $labels.instance }})"
           runbook: high_system_load
 
-      - alert: cpu throttled
+      - alert: coroot_node_agent cpu throttled
         expr: |
           rate(container_resources_cpu_throttled_seconds_total[5m])
           / rate(container_resources_cpu_usage_seconds_total[5m]) > 0.25
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "container CPU throttled on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] container CPU throttled on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} is throttled {{ $value | printf \"%.0f\" }}% of its CPU time — consider raising the CPU limit (instance {{ $labels.instance }})"
           runbook: high_cpu_usage
 
   # ── Memory ───────────────────────────────────────────────────────────────────
   - name: node_agent_memory
     rules:
-      - alert: high memory usage
+      - alert: coroot_node_agent high memory usage
         expr: |
           (1 - node_resources_memory_available_bytes / node_resources_memory_total_bytes) * 100 > 85
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "high memory usage on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] high memory usage on {{ $labels.instance }}"
           description: "memory usage is {{ $value | printf \"%.1f\" }}% (instance {{ $labels.instance }})"
           runbook: high_memory_usage
 
-      - alert: critical memory usage
+      - alert: coroot_node_agent critical memory usage
         expr: |
           (1 - node_resources_memory_available_bytes / node_resources_memory_total_bytes) * 100 > 95
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "critical memory usage on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] critical memory usage on {{ $labels.instance }}"
           description: "memory usage is {{ $value | printf \"%.1f\" }}% (instance {{ $labels.instance }})"
           runbook: high_memory_usage
 
-      - alert: oom kill
+      - alert: coroot_node_agent oom kill
         expr: rate(container_oom_kills_total[5m]) > 0
         for: 0m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "OOM kill on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] OOM kill on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} was terminated by the OOM killer (instance {{ $labels.instance }})"
           runbook: high_memory_usage
 
   # ── Disk ─────────────────────────────────────────────────────────────────────
   - name: node_agent_disk
     rules:
-      - alert: disk io saturation
+      - alert: coroot_node_agent disk io saturation
         expr: rate(node_resources_disk_io_time_seconds_total[5m]) > 0.8
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "disk I/O saturated on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] disk I/O saturated on {{ $labels.instance }}"
           description: "disk {{ $labels.device }} is busy {{ $value | printf \"%.0f\" }}% of the time (instance {{ $labels.instance }})"
           runbook: disk_usage_high
 
-      - alert: disk usage high
+      - alert: coroot_node_agent disk usage high
         expr: |
           max by(instance, device, mount_point) (
             container_resources_disk_used_bytes
@@ -122,13 +131,14 @@ groups:
           ) > 85
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "disk usage above 85% on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] disk usage above 85% on {{ $labels.instance }}"
           description: "disk usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.device }} ({{ $labels.mount_point }}) (instance {{ $labels.instance }})"
           runbook: disk_usage_high
 
-      - alert: disk usage critical
+      - alert: coroot_node_agent disk usage critical
         expr: |
           max by(instance, device, mount_point) (
             container_resources_disk_used_bytes
@@ -136,13 +146,14 @@ groups:
           ) > 95
         for: 2m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "disk usage above 95% on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] disk usage above 95% on {{ $labels.instance }}"
           description: "disk usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.device }} ({{ $labels.mount_point }}) (instance {{ $labels.instance }})"
           runbook: disk_usage_high
 
-      - alert: disk will fill in 24h
+      - alert: coroot_node_agent disk will fill in 24h
         expr: |
           predict_linear(
             max by(instance, device, mount_point) (
@@ -151,86 +162,94 @@ groups:
           ) < 0
         for: 10m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "disk predicted to fill within 24 h on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] disk predicted to fill within 24 h on {{ $labels.instance }}"
           description: "linear prediction on {{ $labels.device }} ({{ $labels.mount_point }}) (instance {{ $labels.instance }}) shows disk full in less than 24 hours"
           runbook: disk_usage_high
 
   # ── Network ──────────────────────────────────────────────────────────────────
   - name: node_agent_network
     rules:
-      - alert: network interface down
+      - alert: coroot_node_agent network interface down
         expr: node_net_interface_up == 0
         for: 1m
         labels:
+          maand_job: coroot_node_agent
           severity: critical
         annotations:
-          summary: "network interface down on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] network interface down on {{ $labels.instance }}"
           description: "interface {{ $labels.interface }} is down (instance {{ $labels.instance }})"
           runbook: network_errors
 
-      - alert: high network bandwidth
+      - alert: coroot_node_agent high network bandwidth
         expr: rate(node_net_transmitted_bytes_total[5m]) > 100e6
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "high outbound network bandwidth on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] high outbound network bandwidth on {{ $labels.instance }}"
           description: "interface {{ $labels.interface }} transmitting {{ $value | humanize }}B/s (instance {{ $labels.instance }})"
           runbook: network_errors
 
-      - alert: tcp connection failures
+      - alert: coroot_node_agent tcp connection failures
         expr: rate(container_net_tcp_failed_connects_total[5m]) > 0.1
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "TCP connection failures on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] TCP connection failures on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} failing to connect to {{ $labels.destination }} at {{ $value | printf \"%.2f\" }}/s (instance {{ $labels.instance }})"
           runbook: network_errors
 
-      - alert: high tcp retransmits
+      - alert: coroot_node_agent high tcp retransmits
         expr: |
           rate(container_net_tcp_retransmits_total[5m])
           / (rate(container_net_tcp_successful_connects_total[5m]) > 0) > 0.1
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "high TCP retransmit rate on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] high TCP retransmit rate on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} retransmit ratio to {{ $labels.destination }} is {{ $value | printf \"%.1f\" }} (instance {{ $labels.instance }})"
           runbook: network_errors
 
   # ── Containers ───────────────────────────────────────────────────────────────
   - name: node_agent_containers
     rules:
-      - alert: container restarting
+      - alert: coroot_node_agent container restarting
         expr: rate(container_restarts_total[15m]) * 900 > 1
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "container restarting on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] container restarting on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} has restarted {{ $value | printf \"%.0f\" }} time(s) in the last 15 minutes (instance {{ $labels.instance }})"
           runbook: container_restarting
 
-      - alert: error log spike
+      - alert: coroot_node_agent error log spike
         expr: rate(container_log_messages_total{level="error"}[5m]) > 1
         for: 5m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "error log spike on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] error log spike on {{ $labels.instance }}"
           description: "container {{ $labels.container_id }} is logging errors at {{ $value | printf \"%.1f\" }}/s (instance {{ $labels.instance }})"
           runbook: container_restarting
 
-      - alert: node restarted
+      - alert: coroot_node_agent node restarted
         expr: node_uptime_seconds < 300
         for: 0m
         labels:
+          maand_job: coroot_node_agent
           severity: warning
         annotations:
-          summary: "node restarted on {{ $labels.instance }}"
+          summary: "[{{ $labels.maand_job }}] node restarted on {{ $labels.instance }}"
           description: "node has been up for only {{ $value | humanizeDuration }} (instance {{ $labels.instance }})"
           runbook: container_restarting
