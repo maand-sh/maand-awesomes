@@ -1,7 +1,9 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "selectors": ["clickhouse_keeper"],
   "resources": {
+    "memory": { "min": "256 mb", "max": "2048 mb" },
+    "cpu": { "min": "1200 mhz", "max": "9600 mhz" },
     "ports": {
       "clickhouse_keeper_port_client_tls": {},
       "clickhouse_keeper_port_raft": {},

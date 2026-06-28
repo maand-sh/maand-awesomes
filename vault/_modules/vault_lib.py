@@ -19,6 +19,8 @@ deploy session.
 from __future__ import annotations
 
 import json
+import os
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -28,8 +30,6 @@ import maand
 KEY_SHARES = 5
 KEY_THRESHOLD = 3
 VAULT_CONTAINER = "vault"
-VAULT_ADDR = "http://127.0.0.1:8200"
-API_PORT = 8200
 
 API_TIMEOUT = 180
 SSH_TIMEOUT = 90
@@ -46,6 +46,35 @@ def log(message: str) -> None:
     print(f"[vault] {message}", flush=True)
 
 
+def api_port() -> int:
+    return int(maand.get_kv_value("maand/bucket", "vault_port_api"))
+
+
+def cluster_port() -> int:
+    return int(maand.get_kv_value("maand/bucket", "vault_port_cluster"))
+
+
+def _cert_dir() -> str:
+    module_certs = os.path.join(os.path.dirname(__file__), "certs")
+    if os.path.isfile(os.path.join(module_certs, "ca.crt")):
+        return module_certs
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "certs"))
+
+
+def _ssl_context() -> ssl.SSLContext:
+    ca_path = os.path.join(_cert_dir(), "ca.crt")
+    if os.path.isfile(ca_path):
+        return ssl.create_default_context(cafile=ca_path)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def _api_url(worker_ip: str, endpoint: str) -> str:
+    return f"https://{worker_ip}:{api_port()}{endpoint}"
+
+
 # --- KV / topology -----------------------------------------------------------
 
 def leader_ip() -> str:
@@ -54,7 +83,40 @@ def leader_ip() -> str:
 
 
 def vault_workers() -> list[str]:
-    return maand.get_kv_value("maand/worker", "vault_workers").split(",")
+    return [
+        ip.strip()
+        for ip in maand.get_kv_value("maand/worker", "vault_workers").split(",")
+        if ip.strip()
+    ]
+
+
+def node_label(host: str, workers: list[str]) -> str:
+    try:
+        return f"vault_{workers.index(host)}"
+    except ValueError:
+        return host
+
+
+def node_state(health: dict) -> str:
+    if not health.get("initialized"):
+        return "uninitialized"
+    if health.get("sealed"):
+        return "sealed"
+    if health.get("standby"):
+        return "standby"
+    return "active"
+
+
+def node_endpoint(
+    host: str,
+    workers: list[str],
+    port: int | None = None,
+    health: dict | None = None,
+) -> str:
+    port = port if port is not None else api_port()
+    label = node_label(host, workers)
+    state = node_state(health) if health else "?"
+    return f"{label} ({host}:{port}) state={state}"
 
 
 def _job_ns(prefix: str) -> str:
@@ -88,23 +150,8 @@ def _vault_api_request(
     token: str | None = None,
     timeout: int = 5,
 ) -> dict:
-    """Make an HTTP request to Vault API.
-
-    Args:
-        method: HTTP method (GET, PUT, POST, DELETE).
-        worker_ip: Vault node IP address.
-        endpoint: API endpoint (e.g., "/v1/sys/health", "/v1/sys/init").
-        data: Optional JSON request body.
-        token: Optional Vault token for authentication.
-        timeout: Request timeout in seconds.
-
-    Returns:
-        Parsed JSON response.
-
-    Raises:
-        RuntimeError: On HTTP errors or request failures.
-    """
-    url = f"http://{worker_ip}:{API_PORT}{endpoint}"
+    """Make an HTTPS request to Vault API."""
+    url = _api_url(worker_ip, endpoint)
     headers = {"Content-Type": "application/json"}
     if token:
         headers["X-Vault-Token"] = token
@@ -117,11 +164,12 @@ def _vault_api_request(
         request = urllib.request.Request(
             url, data=body, headers=headers, method=method
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            request, context=_ssl_context(), timeout=timeout
+        ) as response:
             response_data = response.read().decode()
             return json.loads(response_data) if response_data else {}
     except urllib.error.HTTPError as exc:
-        # Try to parse error response; some status codes are expected.
         try:
             error_data = json.loads(exc.read().decode())
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -137,25 +185,20 @@ def _vault_api_request(
 
 
 def vault_status(worker_ip: str) -> dict:
-    """Get Vault status via /v1/sys/health API.
-
-    Returns initialized and sealed status. Note: HTTP 429/472/473/501/503 may be
-    returned even on failure; these carry JSON describing seal/standby state.
-    """
-    url = f"http://{worker_ip}:{API_PORT}/v1/sys/health"
+    """Get Vault status via /v1/sys/health API."""
+    url = _api_url(worker_ip, "/v1/sys/health")
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with urllib.request.urlopen(
+            url, context=_ssl_context(), timeout=5
+        ) as response:
             data = json.loads(response.read().decode())
             return data
     except urllib.error.HTTPError as exc:
-        # 429/472/473/501/503 carry JSON describing seal/standby state.
         if exc.code in (429, 472, 473, 501, 503):
             try:
                 return json.loads(exc.read().decode())
             except json.JSONDecodeError:
-                # Return minimal status if we can't parse JSON response.
                 return {"sealed": True, "initialized": False}
-        # For other errors, try to parse error response or raise.
         try:
             error_data = json.loads(exc.read().decode())
             return error_data
@@ -172,12 +215,13 @@ def vault_status(worker_ip: str) -> dict:
 # --- Readiness probes --------------------------------------------------------
 
 def fetch_health(worker_ip: str) -> dict | None:
-    url = f"http://{worker_ip}:{API_PORT}/v1/sys/health"
+    url = _api_url(worker_ip, "/v1/sys/health")
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with urllib.request.urlopen(
+            url, context=_ssl_context(), timeout=5
+        ) as response:
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
-        # 429/472/473/501/503 carry a JSON body describing seal/standby state.
         if exc.code in (429, 472, 473, 501, 503):
             try:
                 return json.loads(exc.read().decode())
@@ -190,9 +234,11 @@ def fetch_health(worker_ip: str) -> dict | None:
 
 def fetch_leader(worker_ip: str) -> dict | None:
     """GET /v1/sys/leader on a node, or None if unreachable."""
-    url = f"http://{worker_ip}:{API_PORT}/v1/sys/leader"
+    url = _api_url(worker_ip, "/v1/sys/leader")
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with urllib.request.urlopen(
+            url, context=_ssl_context(), timeout=5
+        ) as response:
             return json.loads(response.read().decode())
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
         return None
@@ -204,7 +250,6 @@ def active_leader_ip() -> str | None:
         info = fetch_leader(worker_ip)
         if not info:
             continue
-        # leader_address looks like "http://10.48.200.1:8201".
         addr = info.get("leader_address") or ""
         host = addr.split("//", 1)[-1].rsplit(":", 1)[0].strip()
         if host:
@@ -262,7 +307,15 @@ def wait_operational(worker_ip: str, timeout: int = API_TIMEOUT) -> None:
     )
 
 
-# --- Bootstrap primitives ----------------------------------------------------
+def wait_until_initialized(worker_ip: str, timeout: int = API_TIMEOUT) -> None:
+    _wait(
+        lambda: (health := fetch_health(worker_ip)) and health.get("initialized"),
+        f"{worker_ip}: waiting for vault to initialize",
+        timeout,
+    )
+
+
+# --- Bootstrap primitives ------------------------------------------------------
 
 def store_init_secrets(init_data: dict) -> None:
     keys = extract_unseal_keys(init_data)
@@ -274,11 +327,7 @@ def store_init_secrets(init_data: dict) -> None:
 
 
 def extract_unseal_keys(init_data: dict) -> list[str]:
-    """Return unseal/recovery keys from Vault init response across versions.
-
-    Shamir init typically returns `keys_base64`/`keys`; some payloads expose
-    `unseal_keys_*`. Auto-unseal setups may only return `recovery_keys_*`.
-    """
+    """Return unseal/recovery keys from Vault init response across versions."""
     candidates = (
         "unseal_keys_b64",
         "keys_base64",
@@ -306,10 +355,7 @@ def mark_bootstrapped(leader: str) -> None:
 
 
 def init_leader(leader: str) -> list[str]:
-    """Initialize the leader and return unseal keys for immediate local unseal.
-
-    Secrets are still published to maand KV for followers and future operations.
-    """
+    """Initialize the leader and return unseal keys for immediate local unseal."""
     log(f"{leader}: initializing vault cluster")
     init_data = _vault_api_request(
         "PUT",
@@ -368,11 +414,9 @@ def unseal_node(worker_ip: str, *, unseal_keys: list[str] | None = None) -> None
             timeout=10,
         )
 
-        # Vault may need a short moment to apply unseal progress; stop early if done.
         if not resp.get("sealed", True):
             break
 
-    # Avoid false negatives from immediate status checks right after final key.
     _wait(
         lambda: (h := fetch_health(worker_ip)) and not h.get("sealed"),
         f"{worker_ip}: waiting to become unsealed",
@@ -395,15 +439,22 @@ def join_raft(worker_ip: str, leader: str) -> None:
             "PUT",
             worker_ip,
             "/v1/sys/storage/raft/join",
-            data={"leader_api_addr": f"http://{leader}:{API_PORT}"},
+            data={"leader_api_addr": f"https://{leader}:{api_port()}"},
             timeout=10,
         )
     except RuntimeError as exc:
-        # Raft join might fail if node is already joined or has a different leader.
-        # Check if it's already a peer and return success if so.
         error_msg = str(exc).lower()
-        if "already" in error_msg or "peer" in error_msg:
-            log(f"{worker_ip}: already part of raft cluster")
+        if any(
+            token in error_msg
+            for token in (
+                "already",
+                "peer",
+                "unseal",
+                "raft challenge",
+                "failed to join raft cluster",
+            )
+        ):
+            log(f"{worker_ip}: raft join skipped ({exc})")
             return
         raise
     log(f"{worker_ip}: joined raft cluster")

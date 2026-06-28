@@ -1,6 +1,8 @@
 {{- $memMB := int (get "maand/job/postgres" "memory") -}}
 {{- $sharedMB := div $memMB 4 -}}
 {{- $shmMB := add $sharedMB 1024 -}}
+{{- $cpuMHz := int (get "maand/job/postgres" "cpu") -}}
+{{- $cores := max 1 (div $cpuMHz 2400) -}}
 services:
   postgres:
     build:
@@ -25,8 +27,10 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/postgres" "memory" }}m
         reservations:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/postgres" "min_memory_mb" }}m
     volumes:
       - ./data:/var/lib/postgresql/pgdata
@@ -42,8 +46,8 @@ services:
     restart: always
     network_mode: host
     command:
-      - --web.listen-address=0.0.0.0:{{ get "maand" "postgres_port_postgres_exporter" }}
+      - --web.listen-address=0.0.0.0:{{ get "maand/bucket" "postgres_port_postgres_exporter" }}
     environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:${PATRONI_SUPERUSER_PASSWORD}@{{ .WorkerIP }}:{{ get "maand" "postgres_port_pg" }}/postgres?sslmode=require"
+      DATA_SOURCE_NAME: "postgresql://postgres:${PATRONI_SUPERUSER_PASSWORD}@{{ .WorkerIP }}:{{ get "maand/bucket" "postgres_port_pg" }}/postgres?sslmode=require"
     depends_on:
       - postgres

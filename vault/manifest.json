@@ -1,12 +1,14 @@
 {
-  "version": "2.0.5",
-  "selectors": ["vault", "a"],
+  "version": "2.3.1",
+  "selectors": ["vault"],
   "deploy_parallel_count": 1,
   "update_parallel_count": 1,
   "resources": {
+    "memory": { "min": "256 mb", "max": "2048 mb" },
+    "cpu": { "min": "1200 mhz", "max": "9600 mhz" },
     "ports": {
-      "vault_port_api": 8200,
-      "vault_port_cluster": 8201
+      "vault_port_api": {},
+      "vault_port_cluster": {}
     }
   },
   "health_check": {
@@ -15,6 +17,15 @@
     ],
     "timeout_seconds": 10,
     "wait": { "attempts": 60, "interval_seconds": 5 }
+  },
+  "certs": {
+    "server": {
+      "pkcs8": false,
+      "one": false,
+      "subject": {
+        "common_name": "vault"
+      }
+    }
   },
   "commands": {
     "command_plan_order": {
@@ -25,6 +36,14 @@
     },
     "command_unseal": {
       "executed_on": ["cli"]
+    },
+    "command_cluster_status": {
+      "executed_on": ["cli"],
+      "demands": {
+        "job": "",
+        "command": "",
+        "config": {}
+      }
     }
   }
 }

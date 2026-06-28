@@ -7,8 +7,8 @@ container starts, this hook runs for that node only:
 
   - leader: initialize the cluster on first deploy (store unseal keys in KV), then
     unseal.
-  - follower: wait for the leader to be operational, ensure unseal keys exist, join
-    Raft (retry_join in config.hcl usually already did), then unseal.
+  - follower: wait for the leader to be operational, ensure unseal keys exist,
+    wait until this node is initialized (retry_join), unseal, then join Raft.
 
 Because batches are serialized and the leader runs first, followers always find an
 initialized cluster and published unseal keys. No semaphore, no job_control.
@@ -41,7 +41,7 @@ def bring_up_leader(leader: str) -> None:
 def bring_up_follower(worker_ip: str, leader: str) -> None:
     v.wait_operational(leader)
     v.ensure_keys_present()
-    v.join_raft(worker_ip, leader)
+    v.wait_until_initialized(worker_ip)
     v.unseal_node(worker_ip)
 
 

@@ -5,7 +5,7 @@ global:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: ['{{ .WorkerIP }}:{{ get "maand" "prometheus_port_http" }}']
+      - targets: ['{{ .WorkerIP }}:{{ get "maand/bucket" "prometheus_port_http" }}']
 {{ scrapeConfigs }}
 
 {{ ruleFiles }}

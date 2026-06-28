@@ -15,5 +15,7 @@ restart: fix-data-perms
 	docker compose up -d --force-recreate --remove-orphans
 
 fix-data-perms:
-	mkdir -p ./data
+	mkdir -p ./data ./certs
 	chmod 700 ./data || true
+	chmod 0755 ./certs || true
+	chmod 0640 ./certs/*.crt ./certs/*.key ./certs/ca.crt 2>/dev/null || true

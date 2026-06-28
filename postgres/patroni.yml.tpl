@@ -14,6 +14,12 @@
 {{- end }}
 {{- end }}
 {{ define "pgHbaReplication" -}}
+{{- $cfg := "vars/bucket/job/postgres" -}}
+{{- range split (getOptional $cfg "replication_subnet") "," }}
+{{- if trim . }}
+    - hostssl replication replicator {{ trim . }} scram-sha-256
+{{- end }}
+{{- end }}
 {{- range $ip := split (get "maand/job/postgres" "workers") "," }}
 {{- if $ip }}
     - hostssl replication replicator {{ $ip }}/32 scram-sha-256
@@ -21,7 +27,7 @@
 {{- end }}
 {{- end }}
 {{- $clonefrom := eq (get (printf "maand/worker/%s" .WorkerIP) "postgres_allocation_index") "1" -}}
-{{- $tls_dir := "/etc/patroni/certs" -}}
+{{- $tls_dir := "/run/patroni/certs" -}}
 {{- $memMB := int (get "maand/job/postgres" "memory") -}}
 {{- $sharedMB := div $memMB 4 -}}
 {{- $cacheMB := div (mul $memMB 3) 4 -}}
@@ -37,13 +43,13 @@ namespace: /service/postgres
 name: {{ .WorkerIP }}
 
 restapi:
-  listen: 127.0.0.1:{{ get "maand" "postgres_port_patroni" }}
-  connect_address: {{ .WorkerIP }}:{{ get "maand" "postgres_port_patroni" }}
+  listen: 0.0.0.0:{{ get "maand/bucket" "postgres_port_patroni" }}
+  connect_address: {{ .WorkerIP }}:{{ get "maand/bucket" "postgres_port_patroni" }}
 
 zookeeper:
   hosts:
     {{- range $ip := split (get "maand/job/zookeeper" "workers") "," }}
-    - {{ $ip }}:{{ get "maand" "zookeeper_port_client" }}
+    - {{ $ip }}:{{ get "maand/bucket" "zookeeper_port_client" }}
     {{- end }}
   use_ssl: true
   cacert: {{ $tls_dir }}/ca.crt
@@ -80,8 +86,8 @@ bootstrap:
 {{ template "pgHbaReplication" . }}
 
 postgresql:
-  listen: 0.0.0.0:{{ get "maand" "postgres_port_pg" }}
-  connect_address: {{ .WorkerIP }}:{{ get "maand" "postgres_port_pg" }}
+  listen: 0.0.0.0:{{ get "maand/bucket" "postgres_port_pg" }}
+  connect_address: {{ .WorkerIP }}:{{ get "maand/bucket" "postgres_port_pg" }}
   data_dir: /var/lib/postgresql/pgdata/data
   bin_dir: /usr/lib/postgresql/16/bin
   use_unix_socket: true

@@ -1,5 +1,7 @@
 {{- $memMB := int (get "maand/job/zookeeper" "memory") -}}
 {{- $heapMB := max 512 (div (mul $memMB 3) 4) -}}
+{{- $cpuMHz := int (get "maand/job/zookeeper" "cpu") -}}
+{{- $cores := max 1 (div $cpuMHz 2400) -}}
 services:
   zookeeper:
     image: zookeeper:3.9
@@ -16,8 +18,10 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/zookeeper" "memory" }}m
         reservations:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/zookeeper" "min_memory_mb" }}m
     volumes:
       - ./entrypoint.sh:/conf/entrypoint.sh:ro

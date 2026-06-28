@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Verify ClickHouse HTTP ping responds before otel_collector deploy."""
+"""Verify ClickHouse HTTP ping responds before otel_collector deploy (internal mode only)."""
 
 from __future__ import annotations
 
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -37,21 +38,42 @@ def get_kv_value(namespace: str, key: str) -> str:
     return payload["value"]
 
 
+def get_kv_optional(namespace: str, key: str, default: str = "") -> str:
+    try:
+        return get_kv_value(namespace, key).strip()
+    except (urllib.error.URLError, OSError, KeyError, json.JSONDecodeError, ValueError):
+        return default
+
+
 def main() -> int:
-    port = int(get_kv_value("maand", "clickhouse_port_http"))
+    mode = get_kv_optional("vars/bucket/job/otel_collector", "clickhouse", "internal")
+    if mode == "external":
+        print("clickhouse=external; skip internal wait", flush=True)
+        return 0
+
+    port_raw = get_kv_optional("maand/bucket", "clickhouse_port_https")
+    if not port_raw:
+        print("clickhouse_port_https not set; skip wait", flush=True)
+        return 0
+
     workers = [
         ip.strip()
-        for ip in get_kv_value("maand/job/clickhouse", "workers").split(",")
+        for ip in get_kv_optional("maand/job/clickhouse", "workers").split(",")
         if ip.strip()
     ]
     if not workers:
-        sys.stderr.write("no workers in maand/job/clickhouse\n")
-        return 1
+        print("no internal clickhouse workers; skip wait", flush=True)
+        return 0
 
+    port = int(port_raw)
     for host in workers:
-        url = f"http://{host}:{port}/ping"
+        url = f"https://{host}:{port}/ping"
         try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
                 if resp.status != 200:
                     sys.stderr.write(
                         f"clickhouse health check failed: {url} status {resp.status}\n"

@@ -1,5 +1,5 @@
 {
-  "version": "2.5.2",
+  "version": "2.5.9",
   "deploy_parallel_count": 1,
   "update_parallel_count": 1,
   "certs": {
@@ -20,6 +20,7 @@
   },
   "resources": {
     "memory": { "min": "4 gb", "max": "64 gb" },
+    "cpu": { "min": "2400 mhz", "max": "24000 mhz" },
     "ports": {
       "postgres_port_pg": {},
       "postgres_port_patroni": {},

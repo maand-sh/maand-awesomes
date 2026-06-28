@@ -28,7 +28,7 @@ def zookeeper_workers() -> list[str]:
 
 
 def client_port() -> int:
-    return int(get_kv_value("maand", "zookeeper_port_client"))
+    return int(get_kv_value("maand/bucket", "zookeeper_port_client"))
 
 
 def default_cert_paths(name: str = "quorum") -> tuple[str, str, str]:

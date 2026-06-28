@@ -1,7 +1,8 @@
 {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "resources": {
         "memory": { "min": "512 mb", "max": "2048 mb" },
+        "cpu": { "min": "1200 mhz", "max": "4800 mhz" },
         "ports": {
             "prometheus_port_http": {}
         }

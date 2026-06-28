@@ -1,0 +1,12 @@
+- job_name: vault
+  metrics_path: /v1/sys/metrics
+  scheme: https
+  params:
+    format: ['prometheus']
+  tls_config:
+    insecure_skip_verify: true
+  static_configs:
+    - targets:
+        - maand:port/vault_port_api
+      labels:
+        maand_job: vault

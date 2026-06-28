@@ -1,0 +1,32 @@
+groups:
+  - name: vault_availability
+    rules:
+      - alert: vault metrics down
+        expr: up{maand_job="vault"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "vault metrics down on {{ $labels.instance }}"
+          description: "prometheus cannot scrape vault /v1/sys/metrics on {{ $labels.instance }} for more than 5 minutes"
+          runbook: vault_metrics_down
+
+      - alert: vault sealed
+        expr: vault_core_unsealed == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "vault sealed on {{ $labels.instance }}"
+          description: "vault node {{ $labels.instance }} is sealed and cannot serve secrets"
+          runbook: vault_sealed
+
+      - alert: vault quorum at risk
+        expr: count(up{maand_job="vault"} == 1) < 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "vault cluster quorum at risk"
+          description: "fewer than 2 vault nodes are reachable ({{ $value }} up)"
+          runbook: vault_quorum_at_risk

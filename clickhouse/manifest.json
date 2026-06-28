@@ -1,7 +1,9 @@
 {
-  "version": "1.1.0",
+  "version": "1.4.3",
   "selectors": ["clickhouse"],
   "resources": {
+    "memory": { "min": "2048 mb", "max": "11264 mb" },
+    "cpu": { "min": "2400 mhz", "max": "76800 mhz" },
     "ports": {
       "clickhouse_port_https": {},
       "clickhouse_port_interserver_tls": {},
@@ -28,6 +30,14 @@
   "commands": {
     "command_ensure_secrets": {
       "executed_on": ["post_build"]
+    },
+    "command_wait_clickhouse_keeper": {
+      "executed_on": ["pre_deploy"],
+      "demands": {
+        "job": "clickhouse_keeper",
+        "command": "command_service",
+        "config": {}
+      }
     },
     "command_service": {
       "executed_on": ["cli"],

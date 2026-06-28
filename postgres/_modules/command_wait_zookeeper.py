@@ -50,7 +50,7 @@ def main() -> int:
         print(f"skip zookeeper wait on {me} (checked from {leader})", flush=True)
         return 0
 
-    port = int(get_kv_value("maand", "zookeeper_port_client"))
+    port = int(get_kv_value("maand/bucket", "zookeeper_port_client"))
     workers = [
         ip.strip()
         for ip in get_kv_value("maand/job/zookeeper", "workers").split(",")

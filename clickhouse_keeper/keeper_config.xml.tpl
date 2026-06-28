@@ -19,7 +19,7 @@
     <max_connections>4096</max_connections>
 
     <keeper_server>
-        <tcp_port_secure>{{ get "maand" "clickhouse_keeper_port_client_tls" }}</tcp_port_secure>
+        <tcp_port_secure>{{ get "maand/bucket" "clickhouse_keeper_port_client_tls" }}</tcp_port_secure>
         <server_id>{{ add (int (get (printf "maand/worker/%s" .WorkerIP) "clickhouse_keeper_allocation_index")) 1 }}</server_id>
         <log_storage_path>/var/lib/clickhouse-keeper/coordination/log</log_storage_path>
         <snapshot_storage_path>/var/lib/clickhouse-keeper/coordination/snapshots</snapshot_storage_path>
@@ -36,7 +36,7 @@
             <server>
                 <id>{{ add $index 1 }}</id>
                 <hostname>{{ $keeper_ip }}</hostname>
-                <port>{{ get "maand" "clickhouse_keeper_port_raft" }}</port>
+                <port>{{ get "maand/bucket" "clickhouse_keeper_port_raft" }}</port>
             </server>
             {{- end -}}
         </raft_configuration>
@@ -68,7 +68,7 @@
 
     <prometheus>
         <endpoint>/metrics</endpoint>
-        <port>{{ get "maand" "clickhouse_keeper_port_metrics" }}</port>
+        <port>{{ get "maand/bucket" "clickhouse_keeper_port_metrics" }}</port>
         <metrics>true</metrics>
         <events>true</events>
         <asynchronous_metrics>true</asynchronous_metrics>

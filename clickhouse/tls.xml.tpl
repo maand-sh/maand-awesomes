@@ -3,8 +3,8 @@
     <tcp_port remove="1"/>
     <mysql_port remove="1"/>
     <postgresql_port remove="1"/>
-    <https_port>{{ get "maand" "clickhouse_port_https" }}</https_port>
-    <tcp_port_secure>{{ get "maand" "clickhouse_port_native_tls" }}</tcp_port_secure>
+    <https_port>{{ get "maand/bucket" "clickhouse_port_https" }}</https_port>
+    <tcp_port_secure>{{ get "maand/bucket" "clickhouse_port_native_tls" }}</tcp_port_secure>
 
     <openSSL>
         <server>

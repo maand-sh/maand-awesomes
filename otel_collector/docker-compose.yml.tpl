@@ -1,3 +1,5 @@
+{{- $cpuMHz := int (get "maand/job/otel_collector" "cpu") -}}
+{{- $cores := max 1 (div $cpuMHz 2400) -}}
 services:
   {{ .Job }}:
     image: otel/opentelemetry-collector-contrib:0.115.1
@@ -13,6 +15,8 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/otel_collector" "memory" }}m
         reservations:
+          cpus: "{{ $cores }}"
           memory: {{ get "maand/job/otel_collector" "min_memory_mb" }}m

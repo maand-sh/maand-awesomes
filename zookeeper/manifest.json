@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "selectors": ["zookeeper"],
   "deploy_parallel_count": 1,
   "update_parallel_count": 1,
@@ -14,6 +14,7 @@
   },
   "resources": {
     "memory": { "min": "512 mb", "max": "3584 mb" },
+    "cpu": { "min": "1200 mhz", "max": "9600 mhz" },
     "ports": {
       "zookeeper_port_client": {},
       "zookeeper_port_follower": {},

@@ -1,24 +1,29 @@
+{{- $memMB := int (get "maand/job/clickhouse" "memory") -}}
+{{- $memBytes := mul $memMB 1048576 -}}
+{{- $mhzPerCore := 2400 -}}
+{{- $refCores := 32 -}}
+{{- $cores := max 1 (div (int (get "maand/job/clickhouse" "cpu")) $mhzPerCore) -}}
 <clickhouse>
     <profiles>
         <default>
-            <max_memory_usage>19327352832</max_memory_usage>
-            <max_memory_usage_for_user>25769803776</max_memory_usage_for_user>
-            <max_threads>32</max_threads>
+            <max_memory_usage>{{ div (mul $memBytes 3) 4 }}</max_memory_usage>
+            <max_memory_usage_for_user>{{ $memBytes }}</max_memory_usage_for_user>
+            <max_threads>{{ $cores }}</max_threads>
             <max_execution_time>300</max_execution_time>
             <max_rows_to_read>10000000000</max_rows_to_read>
             <max_bytes_to_read>100000000000</max_bytes_to_read>
-            <max_concurrent_queries_for_user>96</max_concurrent_queries_for_user>
-            <max_concurrent_queries_for_all_users>164</max_concurrent_queries_for_all_users>
-            <max_concurrent_insert_queries>32</max_concurrent_insert_queries>
-            <max_concurrent_select_queries>75</max_concurrent_select_queries>
+            <max_concurrent_queries_for_user>{{ max 2 (div (mul $cores 96) $refCores) }}</max_concurrent_queries_for_user>
+            <max_concurrent_queries_for_all_users>{{ max 4 (div (mul $cores 164) $refCores) }}</max_concurrent_queries_for_all_users>
+            <max_concurrent_insert_queries>{{ max 2 (div (mul $cores 32) $refCores) }}</max_concurrent_insert_queries>
+            <max_concurrent_select_queries>{{ max 2 (div (mul $cores 75) $refCores) }}</max_concurrent_select_queries>
             <load_balancing>random</load_balancing>
             <allow_ddl>1</allow_ddl>
         </default>
         <readonly_profile>
             <readonly>1</readonly>
             <allow_ddl>0</allow_ddl>
-            <max_memory_usage>17179869184</max_memory_usage>
-            <max_threads>32</max_threads>
+            <max_memory_usage>{{ div (mul $memBytes 2) 3 }}</max_memory_usage>
+            <max_threads>{{ $cores }}</max_threads>
             <max_execution_time>600</max_execution_time>
             <load_balancing>nearest_hostname</load_balancing>
             <prefer_localhost_replica>1</prefer_localhost_replica>

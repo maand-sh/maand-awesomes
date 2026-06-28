@@ -15,7 +15,7 @@ Check each ensemble member:
 ```bash
 for ip in $(maand cat kv get maand/job/zookeeper workers | tr ',' ' '); do
   echo "=== $ip ==="
-  curl -s --connect-timeout 2 "http://$ip:$(maand cat kv get maand zookeeper_port_metrics)/metrics" | head -1 || echo unreachable
+  curl -s --connect-timeout 2 "http://$ip:$(maand cat kv get maand/bucket zookeeper_port_metrics)/metrics" | head -1 || echo unreachable
 done
 ```
 

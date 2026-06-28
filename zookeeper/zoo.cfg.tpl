@@ -4,7 +4,7 @@ initLimit=10
 syncLimit=5
 dataDir=/data
 dataLogDir=/logs
-secureClientPort={{ get "maand" "zookeeper_port_client" }}
+secureClientPort={{ get "maand/bucket" "zookeeper_port_client" }}
 4lw.commands.whitelist=srvr,stat,mntr,ruok,conf
 maxClientCnxns=256
 
@@ -39,7 +39,7 @@ ssl.clientHostnameVerification=false
 # the address in server.N is not assigned to an interface on this host).
 quorumListenOnAllIPs=true
 metricsProvider.className=org.apache.zookeeper.metrics.prometheus.PrometheusMetricsProvider
-metricsProvider.httpPort={{ get "maand" "zookeeper_port_metrics" }}
+metricsProvider.httpPort={{ get "maand/bucket" "zookeeper_port_metrics" }}
 {{- range $index, $ip := split (get "maand/job/zookeeper" "workers") "," }}
-server.{{ add $index 1 }}={{ $ip }}:{{ get "maand" "zookeeper_port_follower" }}:{{ get "maand" "zookeeper_port_election" }}
+server.{{ add $index 1 }}={{ $ip }}:{{ get "maand/bucket" "zookeeper_port_follower" }}:{{ get "maand/bucket" "zookeeper_port_election" }}
 {{- end }}

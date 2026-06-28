@@ -5,7 +5,7 @@
         {{- range $index, $keeper_ip := split (get "maand/worker" "clickhouse_keeper_workers") "," -}}
         <node>
             <host>{{ $keeper_ip }}</host>
-            <port>{{ get "maand" "clickhouse_keeper_port_client_tls" }}</port>
+            <port>{{ get "maand/bucket" "clickhouse_keeper_port_client_tls" }}</port>
             <secure>1</secure>
         </node>
         {{- end -}}

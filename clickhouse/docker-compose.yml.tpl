@@ -1,3 +1,6 @@
+{{- $cpuMHz := int (get "maand/job/clickhouse" "cpu") -}}
+{{- $mhzPerCore := 2400 -}}
+{{- $cores := max 1 (div $cpuMHz $mhzPerCore) -}}
 services:
 
   clickhouse:
@@ -35,3 +38,11 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ $cores }}"
+          memory: {{ get "maand/job/clickhouse" "memory" }}m
+        reservations:
+          cpus: "{{ $cores }}"
+          memory: {{ get "maand/job/clickhouse" "min_memory_mb" }}m
