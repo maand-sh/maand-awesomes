@@ -1,0 +1,81 @@
+lowercaseOutputLabelNames: true
+lowercaseOutputName: true
+
+# Whitelist approach — see https://github.com/prometheus/jmx_exporter/blob/main/examples/cassandra.yml
+whitelistObjectNames:
+  - "org.apache.cassandra.metrics:type=Client,*"
+  - "org.apache.cassandra.metrics:type=ClientRequest,*"
+  - "org.apache.cassandra.metrics:type=Compaction,*"
+  - "org.apache.cassandra.metrics:type=Connection,name=Timeouts,*"
+  - "org.apache.cassandra.metrics:type=DroppedMessage,name=Dropped,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=AllMemtablesLiveDataSize,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=AllMemtablesOffHeapDataSize,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=AllMemtablesOnHeapDataSize,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=AntiCompactionTime,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=BloomFilterFalsePositives,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=BloomFilterFalseRatio,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=BytesValidated,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=ReadLatency,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=ReadTotalLatency,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=RepairedDataInconsistenciesConfirmed,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=RepairJobsCompleted,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=RepairJobsStarted,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=RepairTime,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=WriteLatency,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=WriteTotalLatency,*"
+  - "org.apache.cassandra.metrics:type=Keyspace,name=PendingCompactions,*"
+  - "org.apache.cassandra.metrics:type=ReadRepair,*"
+  - "org.apache.cassandra.metrics:type=Storage,name=Exceptions,*"
+  - "org.apache.cassandra.metrics:type=Storage,name=Load,*"
+  - "org.apache.cassandra.metrics:type=Storage,name=RepairExceptions,*"
+  - "org.apache.cassandra.metrics:type=Storage,name=TotalHints,*"
+  - "org.apache.cassandra.metrics:type=ThreadPools,*"
+  - "org.apache.cassandra.metrics:type=ColumnFamily,*,name=LiveSSTableCount"
+  - "org.apache.cassandra.metrics:type=ColumnFamily,*,name=BytesUnrepaired"
+
+rules:
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=(\S*)><>Value
+  name: cassandra_$1_$5
+  type: GAUGE
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=(.+)?(?:Total)(Latency)><>Count
+  name: cassandra_$1_$5$6_seconds_sum
+  type: UNTYPED
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+  valueFactor: 0.000001
+
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=((?:.+)?(?:Latency))><>Count
+  name: cassandra_$1_$5_seconds_count
+  type: UNTYPED
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=(.+)><>Count
+  name: cassandra_$1_$5_count
+  type: UNTYPED
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=((?:.+)?(?:Latency))><>(\d+)thPercentile
+  name: cassandra_$1_$5_seconds
+  type: GAUGE
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+    quantile: "0.$6"
+  valueFactor: 0.000001
+
+- pattern: org.apache.cassandra.metrics<type=(\S*)(?:, ((?!scope)\S*)=(\S*))?(?:, scope=(\S*))?, name=(.+)><>(\d+)thPercentile
+  name: cassandra_$1_$5
+  type: GAUGE
+  labels:
+    "$1": "$4"
+    "$2": "$3"
+    quantile: "0.$6"

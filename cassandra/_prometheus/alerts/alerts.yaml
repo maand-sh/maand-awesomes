@@ -1,0 +1,97 @@
+groups:
+  # ── Availability ─────────────────────────────────────────────────────────────
+  - name: cassandra_availability
+    rules:
+      - alert: cassandra metrics down
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "cassandra metrics endpoint down on {{ $labels.instance }}"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for more than 5 minutes"
+          runbook: job_down
+
+  # ── Errors ───────────────────────────────────────────────────────────────────
+  - name: cassandra_errors
+    rules:
+      - alert: cassandra storage exceptions
+        expr: rate(cassandra_storage_exceptions[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cassandra storage exceptions on {{ $labels.instance }}"
+          description: "storage exceptions are occurring at {{ $value | printf \"%.2f\" }}/s (instance {{ $labels.instance }})"
+          runbook: storage_exceptions
+
+      - alert: cassandra connection timeouts
+        expr: rate(cassandra_connection_timeouts[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cassandra connection timeouts on {{ $labels.instance }}"
+          description: "JMX/client connection timeouts at {{ $value | printf \"%.2f\" }}/s (instance {{ $labels.instance }})"
+          runbook: connection_timeouts
+
+      - alert: cassandra dropped messages
+        expr: rate(cassandra_droppedmessage_dropped[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cassandra dropped messages on {{ $labels.instance }}"
+          description: "internal messages are being dropped at {{ $value | printf \"%.2f\" }}/s (instance {{ $labels.instance }})"
+          runbook: dropped_messages
+
+  # ── Compaction ───────────────────────────────────────────────────────────────
+  - name: cassandra_compaction
+    rules:
+      - alert: cassandra pending compactions high
+        expr: max(cassandra_keyspace_pendingcompactions) > 50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "high pending compactions on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.0f\" }} pending compactions (instance {{ $labels.instance }})"
+          runbook: pending_compactions
+
+  # ── Latency ──────────────────────────────────────────────────────────────────
+  - name: cassandra_latency
+    rules:
+      - alert: cassandra high read latency
+        expr: |
+          cassandra_clientrequest_latency_seconds{scope="Read",quantile="0.99"} > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "high read latency on {{ $labels.instance }}"
+          description: "p99 read latency is {{ $value | humanizeDuration }} (instance {{ $labels.instance }})"
+          runbook: high_latency
+
+      - alert: cassandra high write latency
+        expr: |
+          cassandra_clientrequest_latency_seconds{scope="Write",quantile="0.99"} > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "high write latency on {{ $labels.instance }}"
+          description: "p99 write latency is {{ $value | humanizeDuration }} (instance {{ $labels.instance }})"
+          runbook: high_latency
+
+  # ── Thread pools ─────────────────────────────────────────────────────────────
+  - name: cassandra_threadpools
+    rules:
+      - alert: cassandra thread pool blocked
+        expr: cassandra_threadpools_currentlyblockedtasks > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cassandra thread pool blocked on {{ $labels.instance }}"
+          description: "thread pool {{ $labels.path }} has {{ $value | printf \"%.0f\" }} blocked tasks (instance {{ $labels.instance }})"
+          runbook: thread_pool_blocked

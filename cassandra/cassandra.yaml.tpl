@@ -11,9 +11,9 @@ rpc_address: 0.0.0.0
 broadcast_rpc_address: {{ .WorkerIP }}
 
 # --- Ports (managed by maand) ---
-native_transport_port: {{ get "maand" "cassandra_cql_port" }}
-storage_port: {{ get "maand" "cassandra_storage_port" }}
-ssl_storage_port: {{ get "maand" "cassandra_ssl_storage_port" }}
+native_transport_port: {{ get "maand/bucket" "cassandra_cql_port" }}
+storage_port: {{ get "maand/bucket" "cassandra_storage_port" }}
+ssl_storage_port: {{ get "maand/bucket" "cassandra_ssl_storage_port" }}
 
 # --- Seeds ---
 # Single seed (worker_0) for deterministic bootstrap. Multiple seeds on a fresh
@@ -36,9 +36,20 @@ hints_directory: /var/lib/cassandra/hints
 saved_caches_directory: /var/lib/cassandra/saved_caches
 
 # --- Security ---
-authenticator: AllowAllAuthenticator
-authorizer: AllowAllAuthorizer
+authenticator: PasswordAuthenticator
+authorizer: CassandraAuthorizer
 role_manager: CassandraRoleManager
+
+server_encryption_options:
+  internode_encryption: all
+  legacy_ssl_storage_port_enabled: false
+  require_client_auth: true
+  ssl_context_factory:
+    class_name: org.apache.cassandra.security.PEMBasedSslContextFactory
+  keystore: /var/lib/cassandra/tls/internode.pem
+  keystore_password: ""
+  truststore: /var/lib/cassandra/tls/ca.crt
+  truststore_password: ""
 
 # --- Snitch ---
 endpoint_snitch: SimpleSnitch
